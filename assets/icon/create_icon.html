@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<body>
+<canvas id="canvas" width="512" height="512"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// Background
+ctx.fillStyle = '#2196F3';
+ctx.fillRect(0, 0, 512, 512);
+
+// Building body
+ctx.fillStyle = '#FFFFFF';
+ctx.fillRect(100, 150, 312, 300);
+ctx.strokeStyle = '#1976D2';
+ctx.lineWidth = 8;
+ctx.strokeRect(100, 150, 312, 300);
+
+// Windows (3x4 grid)
+ctx.fillStyle = '#64B5F6';
+ctx.strokeStyle = '#1976D2';
+ctx.lineWidth = 3;
+for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 3; col++) {
+        const x = 140 + col * 90;
+        const y = 190 + row * 60;
+        ctx.fillRect(x, y, 50, 40);
+        ctx.strokeRect(x, y, 50, 40);
+    }
+}
+
+// Door
+ctx.fillStyle = '#8B4513';
+ctx.fillRect(220, 370, 72, 80);
+ctx.strokeStyle = '#654321';
+ctx.lineWidth = 4;
+ctx.strokeRect(220, 370, 72, 80);
+
+// Roof
+ctx.fillStyle = '#E91E63';
+ctx.beginPath();
+ctx.moveTo(80, 150);
+ctx.lineTo(256, 80);
+ctx.lineTo(432, 150);
+ctx.closePath();
+ctx.fill();
+ctx.strokeStyle = '#C2185B';
+ctx.stroke();
+
+// Download
+setTimeout(() => {
+    const link = document.createElement('a');
+    link.download = 'app_icon.png';
+    link.href = canvas.toDataURL();
+    link.click();
+    alert('Icon downloaded! Save it as app_icon.png and app_icon_foreground.png in assets/icon/');
+}, 100);
+</script>
+</body>
+</html>
