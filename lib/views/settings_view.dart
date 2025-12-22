@@ -155,7 +155,6 @@ class _SettingsViewState extends State<SettingsView> {
           if (_isWarden) _buildSection('Data Management', [
             _buildTile(Icons.data_usage, 'Data Center', 'View cleaning records', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DataCenterView()))),
             _buildTile(Icons.storage, 'Clear Old Data', 'Remove 24+ hour old records', _clearOldData),
-            _buildTile(Icons.swap_calls, 'Room Swap Requests', 'View student requests', _showRoomSwapRequests),
             _buildTile(Icons.feedback, 'Student Issues', 'View student issues', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IssueManagementView()))),
           ]),
           _buildSection('Preferences', [

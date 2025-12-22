@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../storage/hive_storage.dart';
 
 class ThemeProvider extends ChangeNotifier {
-  ThemeMode _themeMode = ThemeMode.dark;
+  ThemeMode _themeMode = ThemeMode.system;
 
   ThemeProvider() {
     _loadTheme();
@@ -12,7 +12,7 @@ class ThemeProvider extends ChangeNotifier {
   bool get isDarkMode => _themeMode == ThemeMode.dark;
 
   Future<void> _loadTheme() async {
-    final themeMode = HiveStorage.load<String>(HiveStorage.appStateBox, 'theme_mode', defaultValue: 'dark');
+    final themeMode = HiveStorage.load<String>(HiveStorage.appStateBox, 'theme_mode', defaultValue: 'system');
     _themeMode = _getThemeModeFromString(themeMode!);
     notifyListeners();
   }
@@ -29,8 +29,10 @@ class ThemeProvider extends ChangeNotifier {
         return ThemeMode.light;
       case 'dark':
         return ThemeMode.dark;
+      case 'system':
+        return ThemeMode.system;
       default:
-        return ThemeMode.dark;
+        return ThemeMode.system;
     }
   }
 

@@ -281,7 +281,8 @@ class _MessMenuViewState extends State<MessMenuView> with TickerProviderStateMix
       itemCount: _days.length,
       controller: _pageController,
       onPageChanged: (index) => setState(() => _selectedDay = index),
-      children: _days.map((day) {
+      itemBuilder: (context, index) {
+        final day = _days[index];
         final dayMenu = _weeklyMenu[day]!;
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -291,7 +292,7 @@ class _MessMenuViewState extends State<MessMenuView> with TickerProviderStateMix
             entry.value['items'],
           )).toList(),
         );
-      }).toList(),
+      },
     );
   }
 

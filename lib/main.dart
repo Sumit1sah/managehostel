@@ -311,7 +311,7 @@ class _HomeViewState extends State<HomeView> {
                       _buildModernCard(
                           context,
                           'Room\nCleaning',
-                          Icons.cleaning_services,
+                          Icons.cleaning_services_outlined,
                           () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -319,7 +319,7 @@ class _HomeViewState extends State<HomeView> {
                       _buildModernCard(
                           context,
                           'Room\nAvailability',
-                          Icons.bed,
+                          Icons.hotel_outlined,
                           () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -327,7 +327,7 @@ class _HomeViewState extends State<HomeView> {
                       _buildModernCard(
                           context,
                           'Mess Menu',
-                          Icons.restaurant_menu,
+                          Icons.restaurant_outlined,
                           () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -335,7 +335,7 @@ class _HomeViewState extends State<HomeView> {
                       _buildModernCard(
                           context,
                           'Announcements',
-                          Icons.campaign,
+                          Icons.notifications_active_outlined,
                           () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -343,7 +343,7 @@ class _HomeViewState extends State<HomeView> {
                       _buildModernCard(
                           context,
                           'Issue',
-                          Icons.report_problem,
+                          Icons.bug_report_outlined,
                           () => Navigator.push(
                               context,
                               MaterialPageRoute(
