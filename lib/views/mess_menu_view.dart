@@ -13,6 +13,7 @@ class _MessMenuViewState extends State<MessMenuView> with TickerProviderStateMix
   int _selectedDay = DateTime.now().weekday % 7; // 0=Sun, 1=Mon, etc.
   late PageController _pageController;
   late AnimationController _rotationController;
+  late AnimationController _blinkController;
   
   @override
   void initState() {
@@ -22,12 +23,17 @@ class _MessMenuViewState extends State<MessMenuView> with TickerProviderStateMix
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+    _blinkController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    )..repeat(reverse: true);
   }
   
   @override
   void dispose() {
     _pageController.dispose();
     _rotationController.dispose();
+    _blinkController.dispose();
     super.dispose();
   }
   
@@ -36,127 +42,127 @@ class _MessMenuViewState extends State<MessMenuView> with TickerProviderStateMix
   final Map<String, Map<String, Map<String, dynamic>>> _weeklyMenu = {
     'Sun': {
       'Breakfast': {
-        'time': '7:00 - 9:00 AM',
+        'time': '7:00 - 10:00 AM',
         'items': ['Masala Dosa, Sambar, Chutney', 'Bread, Butter, Jam, Tea']
       },
       'Lunch': {
-        'time': '12:00 - 2:00 PM', 
+        'time': '1:00 - 3:00 PM', 
         'items': ['Rice, Roti, Dal, Mixed Boiled Veg', 'Egg Curry, Mix Veg Masala', 'Salad, Fries']
       },
       'Snacks': {
-        'time': '4:00 - 6:00 PM',
+        'time': '6:00 - 7:00 PM',
         'items': ['Dahi Papdi Chaat, Coffee']
       },
       'Dinner': {
-        'time': '7:00 - 9:00 PM',
+        'time': '8:00 - 10:00 PM',
         'items': ['Rice, Roti, Dal, Mixed Boiled Veg', 'Chicken Kadai, Paneer Kadai', 'Rice Kheer']
       },
     },
     'Mon': {
       'Breakfast': {
-        'time': '7:00 - 9:00 AM',
+        'time': '7:00 - 10:00 AM',
         'items': ['Puri Ghuguni, Corn Flakes, Milk, Banana, Tea']
       },
       'Lunch': {
-        'time': '12:00 - 2:00 PM', 
+        'time': '1:00 - 3:00 PM', 
         'items': ['Rice, Roti, Dal, Mixed Boiled Veg', 'Vegetable Korma, French Fries', 'Pampad (Sriram), Curd']
       },
       'Snacks': {
-        'time': '4:00 - 6:00 PM',
+        'time': '6:00 - 7:00 PM',
         'items': ['Sweet Corn / Rusk, Tea']
       },
       'Dinner': {
-        'time': '7:00 - 9:00 PM',
+        'time': '8:00 - 10:00 PM',
         'items': ['Rice, Roti, Dal, Mixed Boiled Veg', 'Gobi Aloo Mutter Masala, Seasonal Bhaji', 'Gulab Jamun']
       },
     },
     'Tue': {
       'Breakfast': {
-        'time': '7:00 - 9:00 AM',
+        'time': '7:00 - 10:00 AM',
         'items': ['Pav Bhaji / Chole Bhature', 'Bread, Butter, Jam', 'Boiled Egg, Coffee']
       },
       'Lunch': {
-        'time': '12:00 - 2:00 PM', 
+        'time': '1:00 - 3:00 PM', 
         'items': ['Rice, Roti, Dal, Mixed Boiled Veg', 'Matar Paneer, French Fries, Salad']
       },
       'Snacks': {
-        'time': '4:00 - 6:00 PM',
+        'time': '6:00 - 7:00 PM',
         'items': ['Red Pasta (with Onion & Tomato)', 'Lemon Tea']
       },
       'Dinner': {
-        'time': '7:00 - 9:00 PM',
+        'time': '8:00 - 10:00 PM',
         'items': ['Rice, Roti, Dal, Mixed Boiled Veg', 'Soyabin Aloo Masala, Crispy Veg Chips', 'Semai Kheer']
       },
     },
     'Wed': {
       'Breakfast': {
-        'time': '7:00 - 9:00 AM',
+        'time': '7:00 - 10:00 AM',
         'items': ['Egg Omelette, Veg Cutlet', 'Bread, Butter, Jam, Tea']
       },
       'Lunch': {
-        'time': '12:00 - 2:00 PM', 
+        'time': '1:00 - 3:00 PM', 
         'items': ['Rice, Roti, Dal, Mixed Boiled Veg', 'Cabbage Aloo Masala, Fish Masala', 'Fries, Salad']
       },
       'Snacks': {
-        'time': '4:00 - 6:00 PM',
+        'time': '6:00 - 7:00 PM',
         'items': ['Veg Hakka Noodles, Coffee']
       },
       'Dinner': {
-        'time': '7:00 - 9:00 PM',
+        'time': '8:00 - 10:00 PM',
         'items': ['Rice, Roti, Dal, Mixed Boiled Veg', 'Chicken Masala, Paneer Masala', 'Rasgulla']
       },
     },
     'Thu': {
       'Breakfast': {
-        'time': '7:00 - 9:00 AM',
+        'time': '7:00 - 10:00 AM',
         'items': ['Dahi Bada, Aloo Dum, Ghuguni', 'Bread, Butter, Jam, Tea']
       },
       'Lunch': {
-        'time': '12:00 - 2:00 PM', 
+        'time': '1:00 - 3:00 PM', 
         'items': ['Rice, Roti, Dal, Mixed Boiled Veg', 'Muncherian, Aloo Capsicum Dry', 'Papad (Sriram), Curd']
       },
       'Snacks': {
-        'time': '4:00 - 6:00 PM',
+        'time': '6:00 - 7:00 PM',
         'items': ['Masala Maggi, Coffee']
       },
       'Dinner': {
-        'time': '7:00 - 9:00 PM',
+        'time': '8:00 - 10:00 PM',
         'items': ['Rice, Roti, Dal, Mixed Boiled Veg', 'Paneer Hyderabadi, Egg Curry (Dry)', 'Gulab Jamun']
       },
     },
     'Fri': {
       'Breakfast': {
-        'time': '7:00 - 9:00 AM',
+        'time': '7:00 - 10:00 AM',
         'items': ['Bread, Butter, Jam', 'Boiled Egg, Veg Noodles, Ketchup, Tea']
       },
       'Lunch': {
-        'time': '12:00 - 2:00 PM', 
+        'time': '1:00 - 3:00 PM', 
         'items': ['Rice, Roti, Dal, Mixed Boiled Veg', 'Fish Masala, Besan Aloo Curry', 'Seasonal Bhaji, Nalli (Fries)']
       },
       'Snacks': {
-        'time': '4:00 - 6:00 PM',
+        'time': '6:00 - 7:00 PM',
         'items': ['Chicken Soup / Veg Soup']
       },
       'Dinner': {
-        'time': '7:00 - 9:00 PM',
+        'time': '8:00 - 10:00 PM',
         'items': ['Mix Veg Biryani / Chicken Biryani', 'Raita']
       },
     },
     'Sat': {
       'Breakfast': {
-        'time': '7:00 - 9:00 AM',
+        'time': '7:00 - 10:00 AM',
         'items': ['Paratha, Aloo Bhaja', 'Corn Flakes, Milk, Banana, Tea']
       },
       'Lunch': {
-        'time': '12:00 - 2:00 PM', 
+        'time': '1:00 - 3:00 PM', 
         'items': ['Rice, Roti, Dal, Mixed Boiled Veg', 'Egg Masala, Chana Masala', 'Seasonal Bhaji, Papad (Sriram)']
       },
       'Snacks': {
-        'time': '4:00 - 6:00 PM',
+        'time': '6:00 - 7:00 PM',
         'items': ['Good Day Biscuit, Tea']
       },
       'Dinner': {
-        'time': '7:00 - 9:00 PM',
+        'time': '8:00 - 10:00 PM',
         'items': ['Rice, Roti, Dal, Mixed Boiled Veg', 'Chicken Butter Masala, Paneer Butter Masala', 'Rasgulla']
       },
     },
@@ -297,20 +303,30 @@ class _MessMenuViewState extends State<MessMenuView> with TickerProviderStateMix
   }
 
   Widget _buildMealCard(String title, String time, List<String> items) {
+    final now = DateTime.now();
+    final hour = now.hour;
+    
+    // Determine if this meal is currently active
+    bool isActive = false;
+    if (title == 'Breakfast' && hour >= 7 && hour < 10) isActive = true;
+    if (title == 'Lunch' && hour >= 13 && hour < 15) isActive = true;
+    if (title == 'Snacks' && hour >= 18 && hour < 19) isActive = true;
+    if (title == 'Dinner' && hour >= 20 && hour < 22) isActive = true;
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E1E),
         border: Border.all(
-          color: const Color(0xFF4CAF50).withOpacity(0.4),
-          width: 1,
+          color: isActive ? const Color(0xFF4CAF50) : const Color(0xFF4CAF50).withOpacity(0.4),
+          width: isActive ? 2 : 1,
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 8,
+            color: isActive ? const Color(0xFF4CAF50).withOpacity(0.3) : Colors.black.withOpacity(0.3),
+            blurRadius: isActive ? 12 : 8,
             offset: const Offset(0, 4),
           ),
         ],
@@ -320,21 +336,52 @@ class _MessMenuViewState extends State<MessMenuView> with TickerProviderStateMix
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: isActive ? const Color(0xFF4CAF50) : Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (isActive)
+                    const SizedBox(width: 8),
+                  if (isActive)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4CAF50),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'NOW',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              Text(
-                time,
-                style: const TextStyle(
-                  color: Color(0xFF4CAF50),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+              AnimatedBuilder(
+                animation: _blinkController,
+                builder: (context, child) {
+                  return AnimatedOpacity(
+                    opacity: isActive ? (0.3 + 0.7 * _blinkController.value) : 1.0,
+                    duration: const Duration(milliseconds: 100),
+                    child: Text(
+                      time,
+                      style: TextStyle(
+                        color: isActive ? const Color(0xFF4CAF50) : const Color(0xFF4CAF50),
+                        fontSize: 14,
+                        fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -350,8 +397,8 @@ class _MessMenuViewState extends State<MessMenuView> with TickerProviderStateMix
                     width: 4,
                     height: 4,
                     margin: const EdgeInsets.only(top: 8, right: 12),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF4CAF50),
+                    decoration: BoxDecoration(
+                      color: isActive ? const Color(0xFF4CAF50) : const Color(0xFF4CAF50),
                       shape: BoxShape.circle,
                     ),
                   ),
