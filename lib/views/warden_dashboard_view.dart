@@ -28,11 +28,39 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
     _loadComplaintStats();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadComplaintStats(); // Refresh when returning to dashboard
+    _debugPrintIssues(); // Debug: Print current issues
+  }
+
   void _loadComplaintStats() {
     final issues = HiveStorage.loadList(HiveStorage.appStateBox, 'issues');
+    final roomSwapRequests = HiveStorage.loadList(HiveStorage.appStateBox, 'room_swap_requests');
+    
+    final pendingIssues = issues.where((c) => c['status'] == 'pending').length;
+    final pendingRoomSwaps = roomSwapRequests.where((r) => r['status'] == 'pending').length;
+    
     setState(() {
-      _pendingComplaints = issues.where((c) => c['status'] == 'pending').length;
+      _pendingComplaints = pendingIssues + pendingRoomSwaps;
     });
+  }
+
+  void _debugPrintIssues() {
+    final issues = HiveStorage.loadList(HiveStorage.appStateBox, 'issues');
+    final roomSwapRequests = HiveStorage.loadList(HiveStorage.appStateBox, 'room_swap_requests');
+    
+    print('DEBUG: Total issues in storage: ${issues.length}');
+    print('DEBUG: Total room swap requests in storage: ${roomSwapRequests.length}');
+    
+    for (var issue in issues) {
+      print('Issue: ${issue['studentName']} - ${issue['category']} - ${issue['status']}');
+    }
+    
+    for (var request in roomSwapRequests) {
+      print('Room Swap: ${request['studentName']} - ${request['status']}');
+    }
   }
 
   @override
@@ -267,7 +295,7 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
       children: [
         _buildManagementCard(
           'Room Management',
-          'Availability & Cleaning',
+          'Availability & Allocation',
           Icons.hotel_outlined,
           const Color(0xFF059669),
           () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RoomAvailabilityView())),
@@ -283,11 +311,14 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
           },
         ),
         _buildManagementCard(
-          'Cleaning Schedule',
+          'Room Cleaning',
           'Room Maintenance',
           Icons.cleaning_services_outlined,
           const Color(0xFFD97706),
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RoomCleaningView())),
+          () async {
+            await Navigator.push(context, MaterialPageRoute(builder: (_) => const RoomCleaningView()));
+            setState(() {}); // Refresh to show updated cleaning status
+          },
         ),
         _buildManagementCard(
           'System Settings',
@@ -356,6 +387,22 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
     final issues = HiveStorage.loadList(HiveStorage.appStateBox, 'issues')
         .where((issue) => issue['status'] == 'pending')
         .toList();
+    
+    final roomSwapRequests = HiveStorage.loadList(HiveStorage.appStateBox, 'room_swap_requests')
+        .where((request) => request['status'] == 'pending')
+        .toList();
+    
+    // Convert room swap requests to issue format for display
+    final convertedRequests = roomSwapRequests.map((request) => {
+      'studentName': request['studentName'],
+      'studentId': request['studentId'],
+      'room': '${request['currentFloor']} - ${request['currentRoom']}',
+      'category': 'Room Swap',
+      'description': 'From Floor ${request['currentFloor']}-${request['currentRoom']} to Floor ${request['preferredFloor']}-${request['preferredRoom']}. Reason: ${request['reason']}',
+      'submitDate': request['requestDate'],
+    }).toList();
+    
+    final allActiveIssues = [...issues, ...convertedRequests];
 
     Navigator.push(
       context,
@@ -375,7 +422,7 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
             ),
             actions: [
               ElevatedButton.icon(
-                onPressed: () => _exportToExcel(issues),
+                onPressed: () => _exportToExcel(allActiveIssues),
                 icon: const Icon(Icons.download, size: 16),
                 label: const Text('Export Excel'),
                 style: ElevatedButton.styleFrom(
@@ -388,7 +435,7 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
           ),
           body: Padding(
             padding: const EdgeInsets.all(20),
-            child: issues.isEmpty
+            child: allActiveIssues.isEmpty
                 ? const Center(
                     child: Text(
                       'No active issues',
@@ -494,7 +541,7 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
                             ],
                           ),
                           // Data Rows
-                          ...issues.map((issue) => TableRow(
+                          ...allActiveIssues.map((issue) => TableRow(
                             children: [
                               TableCell(
                                 child: Padding(
@@ -894,6 +941,7 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
       ),
     );
   }
+
   void _showQuickAnnouncementDialog() {
     final messageController = TextEditingController();
     
@@ -952,4 +1000,6 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
       ),
     );
   }
+
+
 }

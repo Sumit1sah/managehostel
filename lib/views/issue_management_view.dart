@@ -11,7 +11,11 @@ class IssueManagementView extends StatefulWidget {
 
 class _IssueManagementViewState extends State<IssueManagementView> {
   List<Map<String, dynamic>> _issues = [];
+  List<Map<String, dynamic>> _filteredIssues = [];
   bool _isWarden = false;
+  String _selectedFilter = 'pending';
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -29,8 +33,58 @@ class _IssueManagementViewState extends State<IssueManagementView> {
 
   void _loadIssues() {
     final issues = HiveStorage.loadList(HiveStorage.appStateBox, 'issues');
+    final roomSwapRequests = HiveStorage.loadList(HiveStorage.appStateBox, 'room_swap_requests');
+    
+    // Convert room swap requests to issue format
+    final convertedRequests = roomSwapRequests.map((request) => {
+      'id': request['id'],
+      'studentId': request['studentId'],
+      'studentName': request['studentName'],
+      'room': '${request['currentFloor']} - ${request['currentRoom']}',
+      'category': 'Room Swap',
+      'description': 'From Floor ${request['currentFloor']}-${request['currentRoom']} to Floor ${request['preferredFloor']}-${request['preferredRoom']}. Reason: ${request['reason']}',
+      'status': request['status'],
+      'submitDate': request['requestDate'],
+      'isRoomSwap': true,
+      'originalRequest': request,
+    }).toList();
+    
     setState(() {
-      _issues = issues;
+      _issues = [...issues, ...convertedRequests];
+      _applyFilters();
+    });
+  }
+
+  void _applyFilters() {
+    List<Map<String, dynamic>> filtered = List.from(_issues);
+    
+    // Filter by status
+    if (_selectedFilter != 'all') {
+      filtered = filtered.where((issue) => issue['status'] == _selectedFilter).toList();
+    }
+    
+    // Filter by search query
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered.where((issue) {
+        final studentName = (issue['studentName'] ?? '').toString().toLowerCase();
+        final studentId = (issue['studentId'] ?? '').toString().toLowerCase();
+        final category = (issue['category'] ?? '').toString().toLowerCase();
+        final description = (issue['description'] ?? '').toString().toLowerCase();
+        final room = (issue['room'] ?? '').toString().toLowerCase();
+        
+        return studentName.contains(_searchQuery.toLowerCase()) ||
+               studentId.contains(_searchQuery.toLowerCase()) ||
+               category.contains(_searchQuery.toLowerCase()) ||
+               description.contains(_searchQuery.toLowerCase()) ||
+               room.contains(_searchQuery.toLowerCase());
+      }).toList();
+    }
+    
+    // Sort by date (newest first)
+    filtered.sort((a, b) => (b['submitDate'] ?? '').compareTo(a['submitDate'] ?? ''));
+    
+    setState(() {
+      _filteredIssues = filtered;
     });
   }
 
@@ -94,24 +148,43 @@ class _IssueManagementViewState extends State<IssueManagementView> {
   }
 
   void _updateIssueStatus(String issueId, String status, String message) {
-    setState(() {
-      for (int i = 0; i < _issues.length; i++) {
-        if (_issues[i]['id'] == issueId) {
-          _issues[i]['status'] = status;
-          _issues[i]['${status}Date'] = DateTime.now().toIso8601String();
+    final issue = _issues.firstWhere((i) => i['id'] == issueId);
+    
+    if (issue['isRoomSwap'] == true) {
+      // Handle room swap request
+      final requests = HiveStorage.loadList(HiveStorage.appStateBox, 'room_swap_requests');
+      for (int i = 0; i < requests.length; i++) {
+        if (requests[i]['id'] == issueId) {
+          requests[i]['status'] = status == 'resolved' ? 'approved' : status;
+          requests[i]['processedDate'] = DateTime.now().toIso8601String();
           if (message.isNotEmpty) {
-            _issues[i]['${status}Message'] = message;
+            requests[i]['${status == 'resolved' ? 'approved' : status}Message'] = message;
           }
           break;
         }
       }
-    });
+      HiveStorage.saveList(HiveStorage.appStateBox, 'room_swap_requests', requests);
+    } else {
+      // Handle regular issue
+      final issues = HiveStorage.loadList(HiveStorage.appStateBox, 'issues');
+      for (int i = 0; i < issues.length; i++) {
+        if (issues[i]['id'] == issueId) {
+          issues[i]['status'] = status;
+          issues[i]['${status}Date'] = DateTime.now().toIso8601String();
+          if (message.isNotEmpty) {
+            issues[i]['${status}Message'] = message;
+          }
+          break;
+        }
+      }
+      HiveStorage.saveList(HiveStorage.appStateBox, 'issues', issues);
+    }
     
-    HiveStorage.saveList(HiveStorage.appStateBox, 'issues', _issues);
+    _loadIssues(); // Reload to refresh the combined list
     
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Issue ${status} successfully!'),
+        content: Text('${issue['isRoomSwap'] == true ? 'Room swap request' : 'Issue'} ${status == 'resolved' && issue['isRoomSwap'] == true ? 'approved' : status} successfully!'),
         backgroundColor: status == 'resolved' ? Colors.green : Colors.red,
       ),
     );
@@ -181,76 +254,167 @@ class _IssueManagementViewState extends State<IssueManagementView> {
             child: Row(
               children: [
                 Expanded(
-                  child: Card(
-                    color: Colors.orange.shade100,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          Icon(Icons.pending, color: Colors.orange, size: 32),
-                          const SizedBox(height: 8),
-                          Text(
-                            '$pendingIssues',
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                          ),
-                          const Text('Pending'),
-                        ],
+                  child: GestureDetector(
+                    onTap: () => _setFilter('pending'),
+                    child: Card(
+                      color: _selectedFilter == 'pending' ? Colors.orange : Colors.orange.shade100,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Icon(Icons.pending, color: _selectedFilter == 'pending' ? Colors.white : Colors.orange, size: 32),
+                            const SizedBox(height: 8),
+                            Text(
+                              '$pendingIssues',
+                              style: TextStyle(
+                                fontSize: 24, 
+                                fontWeight: FontWeight.bold,
+                                color: _selectedFilter == 'pending' ? Colors.white : Colors.black,
+                              ),
+                            ),
+                            Text(
+                              'Pending',
+                              style: TextStyle(
+                                color: _selectedFilter == 'pending' ? Colors.white : Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Card(
-                    color: Colors.green.shade100,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          Icon(Icons.check_circle, color: Colors.green, size: 32),
-                          const SizedBox(height: 8),
-                          Text(
-                            '$resolvedIssues',
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                          ),
-                          const Text('Resolved'),
-                        ],
+                  child: GestureDetector(
+                    onTap: () => _setFilter('resolved'),
+                    child: Card(
+                      color: _selectedFilter == 'resolved' ? Colors.green : Colors.green.shade100,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Icon(Icons.check_circle, color: _selectedFilter == 'resolved' ? Colors.white : Colors.green, size: 32),
+                            const SizedBox(height: 8),
+                            Text(
+                              '$resolvedIssues',
+                              style: TextStyle(
+                                fontSize: 24, 
+                                fontWeight: FontWeight.bold,
+                                color: _selectedFilter == 'resolved' ? Colors.white : Colors.black,
+                              ),
+                            ),
+                            Text(
+                              'Resolved',
+                              style: TextStyle(
+                                color: _selectedFilter == 'resolved' ? Colors.white : Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Card(
-                    color: Colors.red.shade100,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          Icon(Icons.cancel, color: Colors.red, size: 32),
-                          const SizedBox(height: 8),
-                          Text(
-                            '$rejectedIssues',
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                          ),
-                          const Text('Rejected'),
-                        ],
+                  child: GestureDetector(
+                    onTap: () => _setFilter('rejected'),
+                    child: Card(
+                      color: _selectedFilter == 'rejected' ? Colors.red : Colors.red.shade100,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Icon(Icons.cancel, color: _selectedFilter == 'rejected' ? Colors.white : Colors.red, size: 32),
+                            const SizedBox(height: 8),
+                            Text(
+                              '$rejectedIssues',
+                              style: TextStyle(
+                                fontSize: 24, 
+                                fontWeight: FontWeight.bold,
+                                color: _selectedFilter == 'rejected' ? Colors.white : Colors.black,
+                              ),
+                            ),
+                            Text(
+                              'Rejected',
+                              style: TextStyle(
+                                color: _selectedFilter == 'rejected' ? Colors.white : Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
               ],
             ),
           ),
+          // Search Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search by student name, ID, category, or room...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                          });
+                          _applyFilters();
+                        },
+                        icon: const Icon(Icons.clear),
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+                _applyFilters();
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
           // Issues List
           Expanded(
-            child: _issues.isEmpty
-                ? const Center(child: Text('No issues submitted yet.'))
+            child: _filteredIssues.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _searchQuery.isNotEmpty ? Icons.search_off : Icons.inbox_outlined,
+                          size: 64,
+                          color: theme.colorScheme.onSurface.withOpacity(0.3),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _searchQuery.isNotEmpty 
+                              ? 'No issues found matching "$_searchQuery"'
+                              : 'No ${_selectedFilter} issues',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
                 : ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: _issues.length,
+                    itemCount: _filteredIssues.length,
                     itemBuilder: (context, index) {
-                      final issue = _issues[index];
+                      final issue = _filteredIssues[index];
                       final isResolved = issue['status'] == 'resolved';
                       final isRejected = issue['status'] == 'rejected';
                       final isPending = issue['status'] == 'pending';
@@ -319,13 +483,27 @@ class _IssueManagementViewState extends State<IssueManagementView> {
                               ),
                               const SizedBox(height: 12),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Submitted: ${DateTime.parse(issue['submitDate']).day}/${DateTime.parse(issue['submitDate']).month}/${DateTime.parse(issue['submitDate']).year}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: theme.colorScheme.onSurface.withOpacity(0.6),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Student ID: ${issue['studentId']}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Submitted: ${DateTime.parse(issue['submitDate']).day}/${DateTime.parse(issue['submitDate']).month}/${DateTime.parse(issue['submitDate']).year}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   if (_isWarden && isPending) ...[
@@ -334,8 +512,9 @@ class _IssueManagementViewState extends State<IssueManagementView> {
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.green,
                                         foregroundColor: Colors.white,
+                                        minimumSize: const Size(80, 32),
                                       ),
-                                      child: const Text('Resolve'),
+                                      child: const Text('Resolve', style: TextStyle(fontSize: 12)),
                                     ),
                                     const SizedBox(width: 8),
                                     ElevatedButton(
@@ -343,10 +522,17 @@ class _IssueManagementViewState extends State<IssueManagementView> {
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.red,
                                         foregroundColor: Colors.white,
+                                        minimumSize: const Size(80, 32),
                                       ),
-                                      child: const Text('Reject'),
+                                      child: const Text('Reject', style: TextStyle(fontSize: 12)),
                                     ),
                                   ],
+                                  if (_isWarden && !isPending)
+                                    IconButton(
+                                      onPressed: () {},
+                                      icon: const Icon(Icons.info_outline),
+                                      tooltip: 'View Details',
+                                    ),
                                 ],
                               ),
                               if (isResolved && issue['resolvedDate'] != null) ...[
@@ -401,5 +587,22 @@ class _IssueManagementViewState extends State<IssueManagementView> {
         ],
       ),
     );
+  }
+
+  void _setFilter(String filter) {
+    setState(() {
+      _selectedFilter = filter;
+    });
+    _applyFilters();
+  }
+
+  String _formatDateTime(String? dateString) {
+    if (dateString == null) return 'N/A';
+    try {
+      final date = DateTime.parse(dateString);
+      return '${date.day}/${date.month}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return 'N/A';
+    }
   }
 }

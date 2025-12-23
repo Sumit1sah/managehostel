@@ -209,7 +209,12 @@ class _SettingsViewState extends State<SettingsView> {
                   radius: 40,
                   backgroundColor: theme.colorScheme.primary,
                   backgroundImage: _profileImagePath != null ? FileImage(File(_profileImagePath!)) : null,
-                  child: _profileImagePath == null ? const Text('JD', style: TextStyle(fontSize: 32, color: Colors.white)) : null,
+                  child: _profileImagePath == null 
+                      ? Text(
+                          _getInitials(_name),
+                          style: const TextStyle(fontSize: 32, color: Colors.white, fontWeight: FontWeight.bold),
+                        )
+                      : null,
                 ),
                 Positioned(
                   bottom: 0,
@@ -1050,5 +1055,16 @@ class _SettingsViewState extends State<SettingsView> {
         backgroundColor: Colors.green,
       ),
     );
+  }
+
+  String _getInitials(String name) {
+    if (name.isEmpty) return 'U';
+    
+    final words = name.trim().split(' ');
+    if (words.length == 1) {
+      return words[0].substring(0, 1).toUpperCase();
+    } else {
+      return '${words[0].substring(0, 1)}${words[1].substring(0, 1)}'.toUpperCase();
+    }
   }
 }

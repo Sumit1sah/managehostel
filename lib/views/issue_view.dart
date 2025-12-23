@@ -61,6 +61,13 @@ class _IssueViewState extends State<IssueView> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Submit Issue'),
+        actions: [
+          IconButton(
+            onPressed: _createTestIssue,
+            icon: const Icon(Icons.bug_report),
+            tooltip: 'Create Test Issue',
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -649,6 +656,42 @@ class _IssueViewState extends State<IssueView> {
             child: const Text('Delete'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _createTestIssue() async {
+    final userId = await AuthService().getUserId();
+    if (userId == null) return;
+    
+    final users = HiveStorage.loadList(HiveStorage.appStateBox, 'authorized_users');
+    final userData = users.firstWhere(
+      (user) => user['userId'] == userId,
+      orElse: () => <String, dynamic>{},
+    );
+    
+    final issues = HiveStorage.loadList(HiveStorage.appStateBox, 'issues');
+    
+    final testIssue = {
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'studentId': userId,
+      'studentName': userData['name'] ?? 'Test Student',
+      'room': '${userData['floor'] ?? '1'} - ${userData['room'] ?? '01'}',
+      'category': 'Maintenance',
+      'description': 'Test issue: AC not working properly in room. Please check and repair.',
+      'status': 'pending',
+      'submitDate': DateTime.now().toIso8601String(),
+    };
+    
+    issues.add(testIssue);
+    HiveStorage.saveList(HiveStorage.appStateBox, 'issues', issues);
+    
+    setState(() {}); // Refresh the UI
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Test issue created! Check warden dashboard.'),
+        backgroundColor: Colors.blue,
       ),
     );
   }

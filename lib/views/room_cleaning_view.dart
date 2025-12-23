@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../controllers/cleaning_controller.dart';
-import '../models/room_cleaning.dart';
 import '../core/storage/hive_storage.dart';
 import '../services/auth_service.dart';
 
@@ -13,131 +10,56 @@ class RoomCleaningView extends StatefulWidget {
 }
 
 class _RoomCleaningViewState extends State<RoomCleaningView> {
-  final String studentId = 'S001';
-  String selectedFloor = 'Ground Floor';
-  List<String> floors = [];
-
+  bool _isWarden = false;
+  bool _roomCleaning = false;
+  bool _toiletCleaning = false;
+  bool _corridorCleaning = false;
 
   @override
   void initState() {
     super.initState();
-    _loadFloors();
-    _scheduleMidnightCleanup();
+    _checkUserRole();
   }
 
-  void _scheduleMidnightCleanup() {
-    final now = DateTime.now();
-    final cleanupTime = DateTime(now.year, now.month, now.day, 0, 50, 0);
-    final targetTime = cleanupTime.isBefore(now) 
-        ? DateTime(now.year, now.month, now.day + 1, 0, 50, 0)
-        : cleanupTime;
-    final duration = targetTime.difference(now);
-    
-    Future.delayed(duration, () async {
-      await HiveStorage.clearBox(HiveStorage.cleaningsBox);
-      // Clear floor completion status
-      for (var floor in floors) {
-        await HiveStorage.save(HiveStorage.appStateBox, 'floor_completed_$floor', false);
-      }
-      if (mounted) {
-        setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Room cleaning history cleared at 00:50 AM')),
-        );
-      }
-      // Schedule next cleanup
-      _scheduleMidnightCleanup();
-    });
-  }
-
-  Future<void> _loadFloors() async {
-    final data = HiveStorage.load<List>(HiveStorage.floorsBox, 'floors_data');
-    final loaded = data != null && data.isNotEmpty 
-        ? List<String>.from(data) 
-        : ['Ground Floor', 'First Floor', 'Second Floor', 'Third Floor'];
+  void _checkUserRole() async {
+    final isWarden = await AuthService().isWarden();
     setState(() {
-      floors = ['Not Selected', ...loaded];
-      selectedFloor = 'Not Selected';
+      _isWarden = isWarden;
     });
-    _initializeRoomsForFloors();
-  }
-
-  Future<void> _initializeRoomsForFloors() async {
-    // Rooms are now generated on-the-fly when viewing each floor
-  }
-
-  bool _isFloorCompleted(String floor) {
-    return HiveStorage.load<bool>(HiveStorage.appStateBox, 'floor_completed_$floor', defaultValue: false) ?? false;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Room Cleaning')),
-      body: ChangeNotifierProvider(
-        create: (_) => CleaningController(),
-        child: Consumer<CleaningController>(
-          builder: (context, controller, _) {
-            final floorCleanings = controller.getCleaningsByFloor();
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButton<String>(
-                          value: selectedFloor,
-                          isExpanded: true,
-                          items: floors.map((floor) => DropdownMenuItem(value: floor, child: Text(floor))).toList(),
-                          onChanged: (value) async {
-                            if (value != null && value != 'Not Selected') {
-                              final isCompleted = HiveStorage.load<bool>(HiveStorage.appStateBox, 'floor_completed_$value', defaultValue: false);
-                              if (isCompleted!) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text('✅ The floor cleaning is completed', style: TextStyle(fontSize: 16)),
-                                    backgroundColor: Colors.green,
-                                    duration: const Duration(milliseconds: 500),
-                                  ),
-                                );
-                                return;
-                              }
-                            }
-                            setState(() => selectedFloor = value ?? 'Not Selected');
-                          },
-                        ),
-                      ),
-
-
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: selectedFloor.isEmpty || selectedFloor == 'Not Selected'
-                      ? const Center(child: Text('Please select a floor to view rooms'))
-                      : _isFloorCompleted(selectedFloor)
-                          ? const Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.check_circle, size: 80, color: Colors.green),
-                                  SizedBox(height: 20),
-                                  Text('Floor Cleaning Completed!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            )
-                          : _buildFloorRooms(floorCleanings[selectedFloor] ?? [], controller),
-                ),
-              ],
-            );
-          },
-        ),
+      appBar: AppBar(
+        title: const Text('Room Cleaning'),
+        actions: [
+          if (_isWarden)
+            Container(
+              margin: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.green,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'WARDEN',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+          if (_isWarden)
+            IconButton(
+              onPressed: _resetAllCleaningData,
+              icon: const Icon(Icons.refresh, color: Colors.red),
+              tooltip: 'Reset All Cleaning Data',
+            ),
+        ],
       ),
+      body: _isWarden ? _buildWardenView() : _buildStudentView(),
     );
   }
 
-  Widget _buildFloorRooms(List<RoomCleaning> cleanings, CleaningController controller) {
+  Widget _buildStudentView() {
     return FutureBuilder<String?>(
       future: AuthService().getUserId(),
       builder: (context, snapshot) {
@@ -163,189 +85,762 @@ class _RoomCleaningViewState extends State<RoomCleaningView> {
           );
         }
         
-        final studentFloor = userData['floor'] ?? '0';
-        final studentRoom = userData['room'] ?? '01';
-        final studentRoomNumber = '${studentFloor}A-${studentRoom.padLeft(2, '0')}';
+        final floor = userData['floor']?.toString() ?? '0';
+        final room = userData['room']?.toString() ?? '01';
+        final roomNumber = '${floor}A-${room.padLeft(2, '0')}';
         
-        // Check if selected floor matches student's floor
-        final floorIndex = floors.indexOf(selectedFloor);
-        final expectedFloorIndex = int.parse(studentFloor);
-        
-        if (floorIndex != expectedFloorIndex) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.info_outline, size: 80, color: Colors.grey),
-                SizedBox(height: 20),
-                Text('No rooms assigned to you on this floor', style: TextStyle(fontSize: 18, color: Colors.grey)),
-              ],
-            ),
-          );
-        }
-        
-        // Only show the student's assigned room
-        final existingCleaning = cleanings.where((c) => c.roomNumber == studentRoomNumber).firstOrNull;
-        final cleaning = existingCleaning ?? RoomCleaning(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          roomNumber: studentRoomNumber,
-          floor: selectedFloor,
-          studentId: userId,
-          scheduledDate: DateTime.now(),
+        // Check if already submitted today
+        final cleaningData = HiveStorage.loadList(HiveStorage.appStateBox, 'room_cleaning_submissions');
+        final today = DateTime.now().toIso8601String().split('T')[0];
+        final todaySubmission = cleaningData.firstWhere(
+          (submission) => submission['roomNumber'] == roomNumber && 
+                         submission['date'] == today,
+          orElse: () => <String, dynamic>{},
         );
-        final isExisting = existingCleaning != null;
         
-        return Column(
-          children: [
-            if (cleaning.status == CleaningStatus.completed)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Container(
-                  width: double.infinity,
+        final isSubmitted = todaySubmission.isNotEmpty;
+        
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Card(
+                child: Padding(
                   padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.green,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Text(
-                    'ROOM CLEANING COMPLETED ✓',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                    textAlign: TextAlign.center,
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.home,
+                        size: 60,
+                        color: isSubmitted ? Colors.green : Colors.blue,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Your Room: $roomNumber',
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Floor ${floor == '0' ? 'Ground' : floor}',
+                        style: const TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isSubmitted ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              isSubmitted ? Icons.check_circle : Icons.pending,
+                              color: isSubmitted ? Colors.green : Colors.orange,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isSubmitted ? 'Cleaning Submitted Today' : 'Cleaning Pending',
+                              style: TextStyle(
+                                color: isSubmitted ? Colors.green : Colors.orange,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (isSubmitted) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          'Submitted at: ${todaySubmission['time']}',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
-            Expanded(
-              child: ListView(
-                children: [
-                  Card(
-                    margin: const EdgeInsets.all(8),
-                    child: cleaning.status == CleaningStatus.completed
-                        ? ListTile(
-                            title: Text('Room ${cleaning.roomNumber}'),
-                            subtitle: const Text('Status: Submitted ✓'),
-                            trailing: const Icon(Icons.check_circle, color: Colors.green),
-                          )
-                        : ExpansionTile(
-                            title: Text('Room ${cleaning.roomNumber}'),
-                            subtitle: Text('Status: ${cleaning.status.name}'),
-                            trailing: cleaning.isFullyClean
-                                ? const Icon(Icons.check_circle, color: Colors.green)
-                                : const Icon(Icons.pending, color: Colors.orange),
-                            children: [
-                        CheckboxListTile(
-                          title: const Text('Bathroom Clean'),
-                          value: cleaning.bathroomClean,
-                          onChanged: cleaning.status == CleaningStatus.completed
-                              ? null
-                              : (val) async {
-                                  if (!isExisting) {
-                                    await controller.scheduleRoomCleaning(studentRoomNumber, selectedFloor, userId);
-                                    await Future.delayed(const Duration(milliseconds: 100));
-                                  }
-                                  final savedCleaning = controller.getRoomCleanings(studentRoomNumber).first;
-                                  await controller.updateCleaningChecklist(savedCleaning.id, bathroom: val);
-                                },
-                        ),
-                        CheckboxListTile(
-                          title: const Text('Room Clean'),
-                          value: cleaning.roomClean,
-                          onChanged: cleaning.status == CleaningStatus.completed
-                              ? null
-                              : (val) async {
-                                  if (!isExisting) {
-                                    await controller.scheduleRoomCleaning(studentRoomNumber, selectedFloor, userId);
-                                    await Future.delayed(const Duration(milliseconds: 100));
-                                  }
-                                  final savedCleaning = controller.getRoomCleanings(studentRoomNumber).first;
-                                  await controller.updateCleaningChecklist(savedCleaning.id, room: val);
-                                },
-                        ),
-                        CheckboxListTile(
-                          title: const Text('Toilet Clean'),
-                          value: cleaning.toiletClean,
-                          onChanged: cleaning.status == CleaningStatus.completed
-                              ? null
-                              : (val) async {
-                                  if (!isExisting) {
-                                    await controller.scheduleRoomCleaning(studentRoomNumber, selectedFloor, userId);
-                                    await Future.delayed(const Duration(milliseconds: 100));
-                                  }
-                                  final savedCleaning = controller.getRoomCleanings(studentRoomNumber).first;
-                                  await controller.updateCleaningChecklist(savedCleaning.id, toilet: val);
-                                },
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: cleaning.status == CleaningStatus.completed
-                              ? const Text('✓ Submitted', style: TextStyle(color: Colors.green, fontSize: 16, fontWeight: FontWeight.bold))
-                              : ElevatedButton(
-                                  onPressed: cleaning.isFullyClean
-                                      ? () {
-                                          controller.markAttendance(cleaning.id, CleaningStatus.completed);
-                                          showDialog(
-                                            context: context,
-                                            builder: (context) => AlertDialog(
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                              title: Row(
-                                                children: [
-                                                  Icon(Icons.check_circle, color: Colors.green, size: 30),
-                                                  const SizedBox(width: 10),
-                                                  const Text('Success!'),
-                                                ],
-                                              ),
-                                              content: Text(
-                                                '🎉 Thank You!\n\nRoom ${cleaning.roomNumber} cleaning submitted successfully.\n\n✅ Your effort is appreciated!',
-                                                style: const TextStyle(fontSize: 16),
-                                              ),
-                                              actions: [
-                                                ElevatedButton(
-                                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                                                  onPressed: () => Navigator.pop(context),
-                                                  child: const Text('Done'),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        }
-                                      : () {
-                                          showDialog(
-                                            context: context,
-                                            builder: (context) => AlertDialog(
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                              title: Row(
-                                                children: [
-                                                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 30),
-                                                  const SizedBox(width: 10),
-                                                  const Text('Incomplete!'),
-                                                ],
-                                              ),
-                                              content: Text(
-                                                !cleaning.roomClean
-                                                    ? '🧹 Room Clean is mandatory!\n\nPlease clean the room first.'
-                                                    : '✓ Room Clean done!\n\nPlease check at least one more item:\n• Bathroom Clean\n• Toilet Clean',
-                                              ),
-                                              actions: [
-                                                ElevatedButton(
-                                                  onPressed: () => Navigator.pop(context),
-                                                  child: const Text('OK'),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        },
-                                  child: const Text('SUBMIT'),
-                                ),
-                        ),
-                          ],
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+              const SizedBox(height: 20),
+              if (!isSubmitted)
+                _buildCleaningOptions(roomNumber, userId),
+            ],
+          ),
         );
       },
     );
   }
 
+  Widget _buildWardenView() {
+    final theme = Theme.of(context);
+    final users = HiveStorage.loadList(HiveStorage.appStateBox, 'authorized_users')
+        .where((user) => user['role'] != 'warden')
+        .toList();
+    
+    final cleaningData = HiveStorage.loadList(HiveStorage.appStateBox, 'room_cleaning_submissions');
+    final today = DateTime.now().toIso8601String().split('T')[0];
+    
+    // Group by floor
+    Map<String, List<Map<String, dynamic>>> floorData = {};
+    
+    for (var user in users) {
+      final floor = user['floor']?.toString() ?? '0';
+      final room = user['room']?.toString() ?? '01';
+      final roomNumber = '${floor}A-${room.padLeft(2, '0')}';
+      
+      final todaySubmission = cleaningData.firstWhere(
+        (submission) => submission['roomNumber'] == roomNumber && 
+                       submission['date'] == today,
+        orElse: () => <String, dynamic>{},
+      );
+      
+      final roomInfo = {
+        'studentName': user['name'] ?? user['userId'],
+        'studentId': user['userId'],
+        'floor': floor,
+        'room': room,
+        'roomNumber': roomNumber,
+        'isCompleted': todaySubmission.isNotEmpty,
+        'submissionTime': todaySubmission['time'] ?? '',
+      };
+      
+      final floorName = floor == '0' ? 'Ground Floor' : 'Floor $floor';
+      if (!floorData.containsKey(floorName)) {
+        floorData[floorName] = [];
+      }
+      floorData[floorName]!.add(roomInfo);
+    }
+    
+    // Sort rooms within each floor
+    floorData.forEach((floor, rooms) {
+      rooms.sort((a, b) => a['roomNumber'].compareTo(b['roomNumber']));
+    });
+    
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Room Cleaning Status - ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: floorData.isEmpty
+                ? Center(
+                    child: Text(
+                      'No rooms found',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: theme.colorScheme.onSurface.withOpacity(0.6),
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: floorData.keys.length,
+                    itemBuilder: (context, index) {
+                      final floorName = floorData.keys.elementAt(index);
+                      final rooms = floorData[floorName]!;
+                      final completedCount = rooms.where((room) => room['isCompleted']).length;
+                      
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        color: theme.colorScheme.surface,
+                        child: ExpansionTile(
+                          iconColor: theme.colorScheme.primary,
+                          collapsedIconColor: theme.colorScheme.onSurface.withOpacity(0.6),
+                          title: Row(
+                            children: [
+                              Icon(
+                                Icons.layers,
+                                color: completedCount == rooms.length 
+                                    ? Colors.green 
+                                    : theme.colorScheme.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                floorName,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                              ),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: completedCount == rooms.length 
+                                      ? Colors.green.withOpacity(0.1)
+                                      : theme.colorScheme.primary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '$completedCount/${rooms.length}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: completedCount == rooms.length 
+                                        ? Colors.green 
+                                        : theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+                                borderRadius: BorderRadius.circular(8),
+                                color: theme.colorScheme.surface,
+                              ),
+                              child: Table(
+                                border: TableBorder.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+                                columnWidths: const {
+                                  0: FlexColumnWidth(2),
+                                  1: FlexColumnWidth(1.5),
+                                  2: FlexColumnWidth(1.5),
+                                  3: FlexColumnWidth(1.5),
+                                  4: FlexColumnWidth(1.5),
+                                },
+                                children: [
+                                  // Header Row
+                                  TableRow(
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.surfaceVariant,
+                                    ),
+                                    children: [
+                                      TableCell(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8),
+                                          child: Text(
+                                            'Student Name',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                              color: theme.colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      TableCell(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8),
+                                          child: Text(
+                                            'Student ID',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                              color: theme.colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      TableCell(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8),
+                                          child: Text(
+                                            'Room No',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                              color: theme.colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      TableCell(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8),
+                                          child: Text(
+                                            'Status',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                              color: theme.colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      TableCell(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8),
+                                          child: Text(
+                                            'Time',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                              color: theme.colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  // Data Rows
+                                  ...rooms.map((room) => TableRow(
+                                    children: [
+                                      TableCell(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8),
+                                          child: Text(
+                                            room['studentName'] ?? 'N/A',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: theme.colorScheme.onSurface,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      TableCell(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8),
+                                          child: Text(
+                                            room['studentId'] ?? 'N/A',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: theme.colorScheme.onSurface,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      TableCell(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8),
+                                          child: Text(
+                                            room['roomNumber'],
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: theme.colorScheme.onSurface,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      TableCell(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8),
+                                          child: GestureDetector(
+                                            onTap: () => _showRoomDetails(room['roomNumber'], room['isCompleted']),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: room['isCompleted'] 
+                                                    ? Colors.green.withOpacity(0.1)
+                                                    : Colors.red.withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: theme.colorScheme.primary.withOpacity(0.3),
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    room['isCompleted'] ? 'Done' : 'Pending',
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: room['isCompleted'] ? Colors.green : Colors.red,
+                                                    ),
+                                                    textAlign: TextAlign.center,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Icon(
+                                                    Icons.info_outline,
+                                                    size: 12,
+                                                    color: theme.colorScheme.primary,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      TableCell(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8),
+                                          child: Text(
+                                            room['submissionTime'] ?? '-',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: theme.colorScheme.onSurface.withOpacity(0.7),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  )).toList(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCleaningOptions(String roomNumber, String userId) {
+    bool canSubmit() {
+      if (!_roomCleaning) return false; // Room cleaning is mandatory
+      int checkedCount = [_roomCleaning, _toiletCleaning, _corridorCleaning].where((x) => x).length;
+      return checkedCount >= 2; // At least 2 options must be checked
+    }
+    
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Select Cleaning Activities:',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            CheckboxListTile(
+              title: const Text('Room Cleaning'),
+              subtitle: const Text('Required', style: TextStyle(color: Colors.red, fontSize: 12)),
+              value: _roomCleaning,
+              onChanged: (value) {
+                setState(() {
+                  _roomCleaning = value ?? false;
+                });
+              },
+              activeColor: Colors.green,
+            ),
+            CheckboxListTile(
+              title: const Text('Toilet Cleaning'),
+              value: _toiletCleaning,
+              onChanged: (value) {
+                setState(() {
+                  _toiletCleaning = value ?? false;
+                });
+              },
+              activeColor: Colors.green,
+            ),
+            CheckboxListTile(
+              title: const Text('Corridor Cleaning'),
+              value: _corridorCleaning,
+              onChanged: (value) {
+                setState(() {
+                  _corridorCleaning = value ?? false;
+                });
+              },
+              activeColor: Colors.green,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'Note: Room cleaning is mandatory. Select at least 2 activities to submit.',
+                style: TextStyle(fontSize: 12, color: Colors.blue),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: canSubmit() 
+                    ? () => _submitCleaningWithOptions(roomNumber, userId, {
+                        'roomCleaning': _roomCleaning,
+                        'toiletCleaning': _toiletCleaning,
+                        'corridorCleaning': _corridorCleaning,
+                      })
+                    : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: canSubmit() ? Colors.green : Colors.grey,
+                  padding: const EdgeInsets.all(16),
+                ),
+                child: const Text(
+                  'SUBMIT CLEANING',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _submitCleaningWithOptions(String roomNumber, String userId, Map<String, bool> options) {
+    if (!options['roomCleaning']!) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Room cleaning is mandatory!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    final selectedActivities = <String>[];
+    if (options['roomCleaning']!) selectedActivities.add('Room swept and mopped');
+    if (options['toiletCleaning']!) selectedActivities.add('Toilet sanitized');
+    if (options['corridorCleaning']!) selectedActivities.add('Corridor cleaned');
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Submit Cleaning'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Room: $roomNumber'),
+            const SizedBox(height: 8),
+            const Text('Selected activities:'),
+            ...selectedActivities.map((activity) => Text('• $activity')),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _saveCleaningSubmissionWithOptions(roomNumber, userId, selectedActivities);
+              Navigator.pop(context);
+            },
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _saveCleaningSubmissionWithOptions(String roomNumber, String userId, List<String> activities) {
+    final cleaningData = HiveStorage.loadList(HiveStorage.appStateBox, 'room_cleaning_submissions');
+    final now = DateTime.now();
+    final today = now.toIso8601String().split('T')[0];
+    final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    
+    final submission = {
+      'roomNumber': roomNumber,
+      'studentId': userId,
+      'date': today,
+      'time': time,
+      'timestamp': now.toIso8601String(),
+      'activities': activities,
+    };
+    
+    cleaningData.add(submission);
+    HiveStorage.saveList(HiveStorage.appStateBox, 'room_cleaning_submissions', cleaningData);
+    
+    setState(() {});
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Cleaning activities submitted successfully!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+
+
+  void _showRoomDetails(String roomNumber, bool isCompleted) {
+    final theme = Theme.of(context);
+    final cleaningData = HiveStorage.loadList(HiveStorage.appStateBox, 'room_cleaning_submissions');
+    final today = DateTime.now().toIso8601String().split('T')[0];
+    
+    final submission = cleaningData.firstWhere(
+      (s) => s['roomNumber'] == roomNumber && s['date'] == today,
+      orElse: () => <String, dynamic>{},
+    );
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        title: Row(
+          children: [
+            Icon(
+              isCompleted ? Icons.check_circle : Icons.pending,
+              color: isCompleted ? Colors.green : Colors.orange,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Room $roomNumber Details',
+              style: TextStyle(color: theme.colorScheme.onSurface),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isCompleted 
+                    ? Colors.green.withOpacity(0.1)
+                    : Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isCompleted ? Icons.check_circle : Icons.schedule,
+                    color: isCompleted ? Colors.green : Colors.orange,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    isCompleted ? 'Cleaning Completed' : 'Cleaning Pending',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isCompleted ? Colors.green : Colors.orange,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isCompleted) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Submitted at: ${submission['time']}',
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Activities Completed:',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...((submission['activities'] as List<dynamic>?) ?? []).map(
+                (activity) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.check,
+                        color: Colors.green,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          activity.toString(),
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurface,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ).toList(),
+            ] else ...[
+              const SizedBox(height: 16),
+              Text(
+                'Expected Activities:',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...[
+                'Room swept and mopped',
+                'Toilet sanitized',
+                'Corridor cleaned',
+              ].map(
+                (activity) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.radio_button_unchecked,
+                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          activity,
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurface.withOpacity(0.7),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ).toList(),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Close',
+              style: TextStyle(color: theme.colorScheme.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _resetAllCleaningData() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset Cleaning Data'),
+        content: const Text('Are you sure you want to reset all cleaning data for today? This will clear all student submissions.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final cleaningData = HiveStorage.loadList(HiveStorage.appStateBox, 'room_cleaning_submissions');
+              final today = DateTime.now().toIso8601String().split('T')[0];
+              
+              // Remove today's submissions
+              cleaningData.removeWhere((submission) => submission['date'] == today);
+              HiveStorage.saveList(HiveStorage.appStateBox, 'room_cleaning_submissions', cleaningData);
+              
+              setState(() {});
+              Navigator.pop(context);
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('All cleaning data reset successfully!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Reset', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
 }
