@@ -179,6 +179,9 @@ class _RoomCleaningViewState extends State<RoomCleaningView> {
     final cleaningData = HiveStorage.loadList(HiveStorage.appStateBox, 'room_cleaning_submissions');
     final today = DateTime.now().toIso8601String().split('T')[0];
     
+    print('DEBUG: Total cleaning submissions: ${cleaningData.length}');
+    print('DEBUG: Today: $today');
+    
     // Group by floor
     Map<String, List<Map<String, dynamic>>> floorData = {};
     
@@ -192,6 +195,8 @@ class _RoomCleaningViewState extends State<RoomCleaningView> {
                        submission['date'] == today,
         orElse: () => <String, dynamic>{},
       );
+      
+      print('DEBUG: Room $roomNumber - Submission found: ${todaySubmission.isNotEmpty}');
       
       final roomInfo = {
         'studentName': user['name'] ?? user['userId'],
@@ -253,229 +258,83 @@ class _RoomCleaningViewState extends State<RoomCleaningView> {
                         child: ExpansionTile(
                           iconColor: theme.colorScheme.primary,
                           collapsedIconColor: theme.colorScheme.onSurface.withOpacity(0.6),
-                          title: Row(
-                            children: [
-                              Icon(
-                                Icons.layers,
-                                color: completedCount == rooms.length 
-                                    ? Colors.green 
-                                    : theme.colorScheme.primary,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                floorName,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.colorScheme.onSurface,
-                                ),
-                              ),
-                              const Spacer(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
+                          title: GestureDetector(
+                            onTap: () => _showFloorTable(floorName, rooms),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.layers,
                                   color: completedCount == rooms.length 
-                                      ? Colors.green.withOpacity(0.1)
-                                      : theme.colorScheme.primary.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
+                                      ? Colors.green 
+                                      : theme.colorScheme.primary,
                                 ),
-                                child: Text(
-                                  '$completedCount/${rooms.length}',
+                                const SizedBox(width: 8),
+                                Text(
+                                  floorName,
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: completedCount == rooms.length 
-                                        ? Colors.green 
-                                        : theme.colorScheme.primary,
+                                    color: theme.colorScheme.onSurface,
                                   ),
                                 ),
-                              ),
-                            ],
+                                const Spacer(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: completedCount == rooms.length 
+                                        ? Colors.green.withOpacity(0.1)
+                                        : theme.colorScheme.primary.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '$completedCount/${rooms.length}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: completedCount == rooms.length 
+                                          ? Colors.green 
+                                          : theme.colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           children: [
-                            Container(
-                              margin: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
-                                borderRadius: BorderRadius.circular(8),
-                                color: theme.colorScheme.surface,
-                              ),
-                              child: Table(
-                                border: TableBorder.all(color: theme.colorScheme.outline.withOpacity(0.3)),
-                                columnWidths: const {
-                                  0: FlexColumnWidth(2),
-                                  1: FlexColumnWidth(1.5),
-                                  2: FlexColumnWidth(1.5),
-                                  3: FlexColumnWidth(1.5),
-                                  4: FlexColumnWidth(1.5),
-                                },
-                                children: [
-                                  // Header Row
-                                  TableRow(
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme.surfaceVariant,
-                                    ),
-                                    children: [
-                                      TableCell(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8),
-                                          child: Text(
-                                            'Student Name',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 12,
-                                              color: theme.colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      TableCell(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8),
-                                          child: Text(
-                                            'Student ID',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 12,
-                                              color: theme.colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      TableCell(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8),
-                                          child: Text(
-                                            'Room No',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 12,
-                                              color: theme.colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      TableCell(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8),
-                                          child: Text(
-                                            'Status',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 12,
-                                              color: theme.colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      TableCell(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8),
-                                          child: Text(
-                                            'Time',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 12,
-                                              color: theme.colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  // Data Rows
-                                  ...rooms.map((room) => TableRow(
-                                    children: [
-                                      TableCell(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8),
-                                          child: Text(
-                                            room['studentName'] ?? 'N/A',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: theme.colorScheme.onSurface,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      TableCell(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8),
-                                          child: Text(
-                                            room['studentId'] ?? 'N/A',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: theme.colorScheme.onSurface,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      TableCell(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8),
-                                          child: Text(
-                                            room['roomNumber'],
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: theme.colorScheme.onSurface,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      TableCell(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8),
-                                          child: GestureDetector(
-                                            onTap: () => _showRoomDetails(room['roomNumber'], room['isCompleted']),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: room['isCompleted'] 
-                                                    ? Colors.green.withOpacity(0.1)
-                                                    : Colors.red.withOpacity(0.1),
-                                                borderRadius: BorderRadius.circular(8),
-                                                border: Border.all(
-                                                  color: theme.colorScheme.primary.withOpacity(0.3),
-                                                  width: 1,
-                                                ),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Text(
-                                                    room['isCompleted'] ? 'Done' : 'Pending',
-                                                    style: TextStyle(
-                                                      fontSize: 10,
-                                                      fontWeight: FontWeight.w600,
-                                                      color: room['isCompleted'] ? Colors.green : Colors.red,
-                                                    ),
-                                                    textAlign: TextAlign.center,
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Icon(
-                                                    Icons.info_outline,
-                                                    size: 12,
-                                                    color: theme.colorScheme.primary,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      TableCell(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8),
-                                          child: Text(
-                                            room['submissionTime'] ?? '-',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: theme.colorScheme.onSurface.withOpacity(0.7),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  )).toList(),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: DataTable(
+                                columns: const [
+                                  DataColumn(label: Text('Student Name')),
+                                  DataColumn(label: Text('Room No')),
+                                  DataColumn(label: Text('Status')),
                                 ],
+                                rows: rooms.map((room) => DataRow(
+                                  cells: [
+                                    DataCell(Text(room['studentName'] ?? 'N/A')),
+                                    DataCell(Text(room['roomNumber'])),
+                                    DataCell(
+                                      GestureDetector(
+                                        onTap: () => _showRoomDetails(room['roomNumber'], room['isCompleted'], room['studentName']),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: room['isCompleted'] 
+                                                ? Colors.green.withOpacity(0.1)
+                                                : Colors.red.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            room['isCompleted'] ? 'Done' : 'Pending',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: room['isCompleted'] ? Colors.green : Colors.red,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )).toList(),
                               ),
                             ),
                           ],
@@ -652,9 +511,85 @@ class _RoomCleaningViewState extends State<RoomCleaningView> {
     );
   }
 
+  void _showFloorTable(String floorName, List<Map<String, dynamic>> rooms) {
+    final theme = Theme.of(context);
+    final cleaningData = HiveStorage.loadList(HiveStorage.appStateBox, 'room_cleaning_submissions');
+    final today = DateTime.now().toIso8601String().split('T')[0];
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        title: Text(
+          '$floorName - Cleaning Status',
+          style: TextStyle(color: theme.colorScheme.onSurface),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: DataTable(
+              columns: const [
+                DataColumn(label: Text('Student Name')),
+                DataColumn(label: Text('Room No')),
+                DataColumn(label: Text('Status')),
+                DataColumn(label: Text('Time')),
+              ],
+              rows: rooms.map((room) {
+                final submission = cleaningData.firstWhere(
+                  (s) => s['roomNumber'] == room['roomNumber'] && s['date'] == today,
+                  orElse: () => <String, dynamic>{},
+                );
+                
+                return DataRow(
+                  cells: [
+                    DataCell(Text(room['studentName'] ?? 'N/A')),
+                    DataCell(Text(room['roomNumber'])),
+                    DataCell(
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showRoomDetails(room['roomNumber'], room['isCompleted'], room['studentName']);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: room['isCompleted'] 
+                                ? Colors.green.withOpacity(0.1)
+                                : Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            room['isCompleted'] ? 'Done' : 'Pending',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: room['isCompleted'] ? Colors.green : Colors.red,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataCell(Text(submission['time'] ?? '-')),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Close',
+              style: TextStyle(color: theme.colorScheme.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-
-  void _showRoomDetails(String roomNumber, bool isCompleted) {
+  void _showRoomDetails(String roomNumber, bool isCompleted, String? studentName) {
     final theme = Theme.of(context);
     final cleaningData = HiveStorage.loadList(HiveStorage.appStateBox, 'room_cleaning_submissions');
     final today = DateTime.now().toIso8601String().split('T')[0];
@@ -685,6 +620,27 @@ class _RoomCleaningViewState extends State<RoomCleaningView> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.person, color: Colors.blue, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Student: ${studentName ?? 'Unknown'}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -744,44 +700,6 @@ class _RoomCleaningViewState extends State<RoomCleaningView> {
                           activity.toString(),
                           style: TextStyle(
                             color: theme.colorScheme.onSurface,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ).toList(),
-            ] else ...[
-              const SizedBox(height: 16),
-              Text(
-                'Expected Activities:',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 8),
-              ...[
-                'Room swept and mopped',
-                'Toilet sanitized',
-                'Corridor cleaned',
-              ].map(
-                (activity) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.radio_button_unchecked,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          activity,
-                          style: TextStyle(
-                            color: theme.colorScheme.onSurface.withOpacity(0.7),
                             fontSize: 14,
                           ),
                         ),
