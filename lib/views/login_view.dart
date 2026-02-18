@@ -29,110 +29,193 @@ class _LoginViewState extends State<LoginView> {
     final isDark = theme.brightness == Brightness.dark;
     
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDark 
-              ? [const Color(0xFF0F111A), const Color(0xFF1C2033)]
-              : [const Color(0xFFF5F5F5), const Color(0xFFE3F2FD)],
+      backgroundColor: isDark ? const Color(0xFF111827) : const Color(0xFFF7F9FC),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildHeader(theme),
+                  const SizedBox(height: 40),
+                  _buildLoginCard(theme, isDark),
+                ],
+              ),
+            ),
           ),
         ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+      ),
+    );
+  }
+
+  Widget _buildHeader(ThemeData theme) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: theme.colorScheme.primary.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.apartment, size: 50, color: Colors.white),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'KIIT HOSTEL',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '(SECOND HOME)',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Sign in to continue',
+          style: TextStyle(
+            fontSize: 16,
+            color: theme.colorScheme.onSurface.withOpacity(0.6),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLoginCard(ThemeData theme, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_errorMessage != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDC2626).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFDC2626).withOpacity(0.3)),
+                ),
+                child: Row(
                   children: [
-                    Icon(Icons.apartment, size: 80, color: theme.colorScheme.primary),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Hostel Management',
-                      style: theme.textTheme.headlineLarge?.copyWith(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Welcome Back',
-                      style: theme.textTheme.bodyLarge?.copyWith(fontSize: 16),
-                    ),
-                    const SizedBox(height: 40),
-                    if (_errorMessage != null)
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 20),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.withOpacity(0.3)),
-                        ),
-                        child: Text(
-                          _errorMessage!,
-                          style: const TextStyle(color: Colors.red, fontSize: 14),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    TextFormField(
-                      controller: _userIdController,
-                      style: theme.textTheme.bodyMedium,
-                      decoration: const InputDecoration(
-                        labelText: 'User ID',
-                        prefixIcon: Icon(Icons.person),
-                      ),
-                      validator: (value) {
-                        if (value?.isEmpty ?? true) return 'User ID is required';
-                        if (value!.length < 3) return 'User ID must be at least 3 characters';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      style: theme.textTheme.bodyMedium,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock),
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value?.isEmpty ?? true) return 'Password is required';
-                        if (value!.length < 6) return 'Password must be at least 6 characters';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 30),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _handleLogin,
-                        child: _isLoading
-                            ? SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  color: theme.elevatedButtonTheme.style?.foregroundColor?.resolve({}),
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('Login', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: Color(0xFFDC2626), fontSize: 14),
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(height: 20),
+            ],
+            TextFormField(
+              controller: _userIdController,
+              decoration: InputDecoration(
+                labelText: 'User ID',
+                hintText: 'Enter your user ID',
+                prefixIcon: const Icon(Icons.person_outline),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: theme.colorScheme.surface,
+              ),
+              validator: (value) {
+                if (value?.isEmpty ?? true) return 'User ID is required';
+                if (value!.length < 3) return 'User ID must be at least 3 characters';
+                return null;
+              },
             ),
-          ),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: _passwordController,
+              obscureText: _obscurePassword,
+              decoration: InputDecoration(
+                labelText: 'Password',
+                hintText: 'Enter your password',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: theme.colorScheme.surface,
+              ),
+              validator: (value) {
+                if (value?.isEmpty ?? true) return 'Password is required';
+                if (value!.length < 6) return 'Password must be at least 6 characters';
+                return null;
+              },
+            ),
+            const SizedBox(height: 30),
+            SizedBox(
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _handleLogin,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : const Text(
+                        'Sign In',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -158,7 +241,6 @@ class _LoginViewState extends State<LoginView> {
         if (result.success) {
           context.read<AppStateProvider>().saveNavigationState('/home');
           
-          // Route based on user type
           if (result.userType == 'warden') {
             Navigator.pushReplacement(
               context,
@@ -179,7 +261,6 @@ class _LoginViewState extends State<LoginView> {
               context,
               MaterialPageRoute(builder: (_) => const HomeView()),
             );
-            // Show announcements after interface loads
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _showLoginAnnouncements();
             });
@@ -215,11 +296,19 @@ class _LoginViewState extends State<LoginView> {
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: Row(
               children: [
-                Icon(Icons.campaign, color: Colors.orange, size: 24),
-                const SizedBox(width: 8),
-                Text(announcement['title'] ?? 'Announcement'),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.campaign, color: Colors.orange, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text(announcement['title'] ?? 'Announcement')),
               ],
             ),
             content: Column(
@@ -244,7 +333,6 @@ class _LoginViewState extends State<LoginView> {
         );
       }
       
-      // Mark announcements as shown
       for (var announcement in loginAnnouncements) {
         announcement['showOnLogin'] = false;
       }

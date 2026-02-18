@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import 'issue_management_view.dart';
 import 'leave_application_view.dart';
 import 'holiday_list_view.dart';
+import 'settings_view.dart';
 
 class DashboardView extends StatefulWidget {
   const DashboardView({Key? key}) : super(key: key);
@@ -13,312 +14,347 @@ class DashboardView extends StatefulWidget {
 }
 
 class _DashboardViewState extends State<DashboardView> {
-  bool _isWarden = false;
-  int _pendingComplaints = 0;
+  String? _userId;
+  Map<String, dynamic>? _userData;
 
   @override
   void initState() {
     super.initState();
-    _checkWardenStatus();
-    _loadComplaintStats();
+    _loadUserData();
   }
 
-  void _checkWardenStatus() async {
-    final isWarden = await AuthService().isWarden();
+  void _loadUserData() async {
+    final userId = await AuthService().getUserId();
+    if (userId == null) return;
+    
+    final users = HiveStorage.loadList(HiveStorage.appStateBox, 'authorized_users');
+    final userData = users.firstWhere((u) => u['userId'] == userId, orElse: () => {});
+    
     setState(() {
-      _isWarden = isWarden;
-    });
-  }
-
-  void _loadComplaintStats() {
-    final issues = HiveStorage.loadList(HiveStorage.appStateBox, 'issues');
-    setState(() {
-      _pendingComplaints = issues.where((c) => c['status'] == 'pending').length;
+      _userId = userId;
+      _userData = userData;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF1A1A1A), Color(0xFF2A2A2A)],
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
+      backgroundColor: isDark ? const Color(0xFF111827) : const Color(0xFFF7F9FC),
+      appBar: AppBar(
+        backgroundColor: isDark ? const Color(0xFF1F2937) : Colors.white,
+        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.dashboard, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildHeader(),
-                const SizedBox(height: 24),
-                if (!_isWarden) _buildQuickIssueSection(),
-                const SizedBox(height: 24),
-                _buildComplaintCard(),
-                const SizedBox(height: 24),
-                _buildMetricsRow(),
-                const SizedBox(height: 24),
-                _buildChartCard(),
-                const SizedBox(height: 24),
-                _buildDataGrid(),
+                Text(
+                  'Student Dashboard',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                Text(
+                  _userData?['name'] ?? 'Loading...',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
               ],
             ),
-          ),
+          ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1C2033).withOpacity(0.6),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+        actions: [
+          IconButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsView()),
+            ),
+            icon: Icon(Icons.settings_outlined, color: theme.colorScheme.onSurface.withOpacity(0.6)),
           ),
         ],
       ),
-      child: const Row(
-        children: [
-          Icon(Icons.dashboard, color: Color(0xFF64FFDA), size: 28),
-          SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Dashboard', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: Colors.white)),
-              Text('Analytics Overview', style: TextStyle(fontSize: 14, color: Color(0xFFC9CED6))),
-            ],
-          ),
-        ],
-      ),
+      body: _userData == null
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildMetricsRow(),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Quick Actions',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildQuickActions(),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Services',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildServicesGrid(),
+                ],
+              ),
+            ),
     );
   }
 
   Widget _buildMetricsRow() {
+    final issues = HiveStorage.loadList(HiveStorage.appStateBox, 'issues');
+    final myIssues = issues.where((i) => i['studentId'] == _userId && i['status'] == 'pending').length;
+    
+    final leaves = HiveStorage.loadList(HiveStorage.appStateBox, 'leave_applications');
+    final myLeaves = leaves.where((l) => l['studentId'] == _userId).length;
+    
     return Row(
       children: [
-        Expanded(child: _buildMetricCard('Active Users', '2,847', Icons.people, const Color(0xFF64FFDA))),
+        Expanded(
+          child: _buildMetricCard(
+            'My Room',
+            '${_userData?['floor']}-${_userData?['room']}',
+            Icons.home_outlined,
+            const Color(0xFF059669),
+          ),
+        ),
         const SizedBox(width: 16),
-        Expanded(child: _buildMetricCard('Revenue', '\$12.4K', Icons.trending_up, const Color(0xFF40E0D0))),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IssueManagementView())),
+            child: _buildMetricCard(
+              'My Issues',
+              myIssues.toString(),
+              Icons.error_outline,
+              const Color(0xFFDC2626),
+            ),
+          ),
+        ),
         const SizedBox(width: 16),
-        Expanded(child: _buildMetricCard('Orders', '1,234', Icons.shopping_cart, const Color(0xFFB19CD9))),
+        Expanded(
+          child: _buildMetricCard(
+            'Leave Apps',
+            myLeaves.toString(),
+            Icons.calendar_today_outlined,
+            const Color(0xFF2563EB),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildMetricCard(String title, String value, IconData icon, Color accentColor) {
+  Widget _buildMetricCard(String title, String value, IconData icon, Color color) {
+    final theme = Theme.of(context);
+    
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C2033).withOpacity(0.7),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: accentColor.withOpacity(0.1),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
             ),
-            child: Icon(icon, color: accentColor, size: 20),
           ),
-          const SizedBox(height: 12),
-          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-          Text(title, style: const TextStyle(fontSize: 12, color: Color(0xFFC9CED6))),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildChartCard() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1C2033).withOpacity(0.6),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 25,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.bar_chart, color: Color(0xFFFFE082), size: 24),
-              SizedBox(width: 12),
-              Text('Performance Analytics', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Container(
-            height: 200,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                colors: [
-                  const Color(0xFF64FFDA).withOpacity(0.1),
-                  const Color(0xFF64FFDA).withOpacity(0.05),
-                ],
+  Widget _buildQuickActions() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionButton(
+                'Report Issue',
+                Icons.bug_report_outlined,
+                const Color(0xFFDC2626),
+                _showIssueForm,
               ),
-              borderRadius: BorderRadius.circular(12),
             ),
-            child: const Center(
-              child: Text('Chart Area', style: TextStyle(color: Color(0xFFC9CED6), fontSize: 16)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDataGrid() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1C2033).withOpacity(0.6),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 25,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.table_chart, color: Color(0xFF40E0D0), size: 24),
-              SizedBox(width: 12),
-              Text('Recent Activity', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
-            ],
-          ),
-          const SizedBox(height: 20),
-          ...List.generate(4, (index) => _buildDataRow('Item ${index + 1}', 'Status Active', const Color(0xFF64FFDA))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDataRow(String title, String subtitle, Color statusColor) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: statusColor,
-              shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: statusColor.withOpacity(0.5), blurRadius: 8)],
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
-                Text(subtitle, style: const TextStyle(color: Color(0xFFC9CED6), fontSize: 12)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildComplaintCard() {
-    return GestureDetector(
-      onTap: _isWarden 
-          ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IssueManagementView()))
-          : _showIssueForm,
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1C2033).withOpacity(0.6),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildActionButton(
+                'Apply Leave',
+                Icons.calendar_today_outlined,
+                const Color(0xFF7C3AED),
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => LeaveApplicationView(studentId: _userId!, studentName: _userData!['name'] ?? _userId!))),
+              ),
             ),
           ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton(String title, IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.2)),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(Icons.report_problem, color: Colors.orange, size: 32),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _isWarden ? 'Student Issues' : 'Submit Issue',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _isWarden 
-                        ? '$_pendingComplaints pending issues'
-                        : 'Report issues or problems',
-                    style: const TextStyle(fontSize: 14, color: Color(0xFFC9CED6)),
-                  ),
-                ],
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, color: Color(0xFFC9CED6), size: 16),
           ],
         ),
       ),
     );
   }
 
-  void _showIssueForm() async {
-    final userId = await AuthService().getUserId();
-    if (userId == null) return;
+  Widget _buildServicesGrid() {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      crossAxisSpacing: 16,
+      mainAxisSpacing: 16,
+      childAspectRatio: 1.2,
+      children: [
+        _buildServiceCard(
+          'My Issues',
+          'View & Track',
+          Icons.bug_report_outlined,
+          const Color(0xFFDC2626),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IssueManagementView())),
+        ),
+        _buildServiceCard(
+          'Leave Status',
+          'Applications',
+          Icons.calendar_today_outlined,
+          const Color(0xFF7C3AED),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => LeaveApplicationView(studentId: _userId!, studentName: _userData!['name'] ?? _userId!))),
+        ),
+        _buildServiceCard(
+          'Holiday List',
+          'View Holidays',
+          Icons.event_outlined,
+          const Color(0xFF059669),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HolidayListView())),
+        ),
+        _buildServiceCard(
+          'Settings',
+          'Preferences',
+          Icons.settings_outlined,
+          const Color(0xFF6B7280),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsView())),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildServiceCard(
+    String title,
+    String subtitle,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    final theme = Theme.of(context);
     
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const Spacer(),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showIssueForm() {
     String? selectedCategory;
     final categories = ['Maintenance', 'Cleanliness', 'Noise', 'Security', 'Facilities', 'Other'];
     final descriptionController = TextEditingController();
@@ -327,7 +363,7 @@ class _DashboardViewState extends State<DashboardView> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Submit Issue'),
+          title: const Text('Report Issue'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -353,7 +389,7 @@ class _DashboardViewState extends State<DashboardView> {
                 maxLines: 4,
                 decoration: const InputDecoration(
                   labelText: 'Description',
-                  hintText: 'Please describe the issue in detail...',
+                  hintText: 'Describe the issue...',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -367,7 +403,7 @@ class _DashboardViewState extends State<DashboardView> {
             ElevatedButton(
               onPressed: () {
                 if (selectedCategory != null && descriptionController.text.isNotEmpty) {
-                  _submitIssue(userId, selectedCategory!, descriptionController.text);
+                  _submitIssue(selectedCategory!, descriptionController.text);
                   Navigator.pop(context);
                 }
               },
@@ -379,21 +415,14 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
-  void _submitIssue(String userId, String category, String description) async {
-    // Get student info
-    final users = HiveStorage.loadList(HiveStorage.appStateBox, 'authorized_users');
-    final userData = users.firstWhere(
-      (user) => user['userId'] == userId,
-      orElse: () => <String, dynamic>{},
-    );
-    
+  void _submitIssue(String category, String description) {
     final issues = HiveStorage.loadList(HiveStorage.appStateBox, 'issues');
     
     final issue = {
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
-      'studentId': userId,
-      'studentName': userData['name'] ?? userId,
-      'room': '${userData['floor'] ?? '0'} - ${userData['room'] ?? '01'}',
+      'studentId': _userId,
+      'studentName': _userData!['name'] ?? _userId,
+      'room': '${_userData!['floor']} - ${_userData!['room']}',
       'category': category,
       'description': description,
       'status': 'pending',
@@ -403,165 +432,12 @@ class _DashboardViewState extends State<DashboardView> {
     issues.add(issue);
     HiveStorage.saveList(HiveStorage.appStateBox, 'issues', issues);
     
+    setState(() {});
+    
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Issue submitted successfully!'),
         backgroundColor: Colors.green,
-      ),
-    );
-  }
-
-  Widget _buildQuickIssueSection() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1C2033).withOpacity(0.6),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.report_problem, color: Color(0xFFFF6B6B), size: 24),
-              SizedBox(width: 12),
-              Text('Quick Issue Report', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Report issues quickly to the warden',
-            style: TextStyle(fontSize: 14, color: Color(0xFFC9CED6)),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildQuickIssueButton('Maintenance', Icons.build, Colors.orange),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildQuickIssueButton('Cleanliness', Icons.cleaning_services, Colors.blue),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildQuickIssueButton('Other', Icons.more_horiz, Colors.purple),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final userId = await AuthService().getUserId();
-                    if (userId == null) return;
-                    final users = HiveStorage.loadList(HiveStorage.appStateBox, 'authorized_users');
-                    final userData = users.firstWhere((u) => u['userId'] == userId, orElse: () => {});
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => LeaveApplicationView(studentId: userId, studentName: userData['name'] ?? userId)));
-                  },
-                  icon: const Icon(Icons.calendar_today),
-                  label: const Text('Apply for Leave'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.all(16),
-                    backgroundColor: const Color(0xFF64FFDA),
-                    foregroundColor: Colors.black,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HolidayListView())),
-                  icon: const Icon(Icons.event),
-                  label: const Text('Holiday List'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.all(16),
-                    backgroundColor: const Color(0xFFB19CD9),
-                    foregroundColor: Colors.black,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickIssueButton(String category, IconData icon, Color color) {
-    return GestureDetector(
-      onTap: () => _showQuickIssueDialog(category),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 8),
-            Text(
-              category,
-              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showQuickIssueDialog(String preSelectedCategory) async {
-    final userId = await AuthService().getUserId();
-    if (userId == null) return;
-    
-    final descriptionController = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Report $preSelectedCategory Issue'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: descriptionController,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: 'Describe the issue',
-                hintText: 'Please provide details about the problem...',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (descriptionController.text.isNotEmpty) {
-                _submitIssue(userId, preSelectedCategory, descriptionController.text);
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Submit'),
-          ),
-        ],
       ),
     );
   }

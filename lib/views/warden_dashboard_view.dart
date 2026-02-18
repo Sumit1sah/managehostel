@@ -114,14 +114,6 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
           IconButton(
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const ParentLoginView()),
-            ),
-            icon: Icon(Icons.family_restroom, color: theme.colorScheme.primary),
-            tooltip: 'Parent Login',
-          ),
-          IconButton(
-            onPressed: () => Navigator.push(
-              context,
               MaterialPageRoute(builder: (_) => const SettingsView()),
             ),
             icon: Icon(Icons.settings_outlined, color: theme.colorScheme.onSurface.withOpacity(0.6)),
@@ -165,10 +157,9 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
         .where((user) => user['role'] != 'warden')
         .length;
     
-    // Calculate occupancy based on students vs total beds
-    final occupiedBeds = users;
-    final totalBeds = 100; // Assuming 100 total beds in hostel
-    final occupancyRate = totalBeds > 0 ? ((occupiedBeds / totalBeds) * 100).round() : 0;
+    // Count pending leave applications
+    final allLeaves = HiveStorage.loadList(HiveStorage.appStateBox, 'leave_applications');
+    final pendingLeaves = allLeaves.where((l) => l['wardenStatus'] == 'pending').length;
     
     return Row(
       children: [
@@ -197,11 +188,14 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: _buildMetricCard(
-            'Occupancy',
-            '${occupancyRate}%',
-            Icons.home_outlined,
-            const Color(0xFF2563EB),
+          child: GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WardenLeaveManagementView())),
+            child: _buildMetricCard(
+              'Pending Leaves',
+              pendingLeaves.toString(),
+              Icons.calendar_today_outlined,
+              const Color(0xFF2563EB),
+            ),
           ),
         ),
       ],

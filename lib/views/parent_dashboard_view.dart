@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/storage/hive_storage.dart';
 import 'login_view.dart';
 import 'parent_leave_approval_view.dart';
+import 'parent_chat_view.dart';
 
 class ParentDashboardView extends StatefulWidget {
   final String parentId;
@@ -64,6 +65,11 @@ class _ParentDashboardViewState extends State<ParentDashboardView> {
           ),
           ElevatedButton(
             onPressed: () {
+              // Clear parent session
+              HiveStorage.save(HiveStorage.appStateBox, 'current_user_role', null);
+              HiveStorage.save(HiveStorage.appStateBox, 'current_parent_id', null);
+              HiveStorage.save(HiveStorage.appStateBox, 'current_student_id', null);
+              
               Navigator.pop(context);
               Navigator.pushAndRemoveUntil(
                 context,
@@ -80,54 +86,15 @@ class _ParentDashboardViewState extends State<ParentDashboardView> {
   }
 
   void _sendMessageToWarden() {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.message, color: Colors.blue),
-            SizedBox(width: 12),
-            Text('Message Warden'),
-          ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ParentChatView(
+          parentId: widget.parentId,
+          studentId: widget.studentId,
         ),
-        content: TextField(
-          controller: controller,
-          maxLines: 4,
-          decoration: InputDecoration(
-            hintText: 'Type your message...',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (controller.text.isNotEmpty) {
-                _messages.add({
-                  'from': widget.parentId,
-                  'to': 'warden',
-                  'message': controller.text,
-                  'timestamp': DateTime.now().toIso8601String(),
-                  'studentId': widget.studentId,
-                });
-                HiveStorage.saveList(HiveStorage.appStateBox, 'parent_messages_${widget.parentId}', _messages);
-                Navigator.pop(context);
-                setState(() {});
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Message sent'), backgroundColor: Colors.green),
-                );
-              }
-            },
-            child: const Text('Send'),
-          ),
-        ],
       ),
-    );
+    ).then((_) => _loadData());
   }
 
   @override
@@ -142,10 +109,6 @@ class _ParentDashboardViewState extends State<ParentDashboardView> {
         backgroundColor: theme.appBarTheme.backgroundColor,
         title: Text('Parent Dashboard', style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(
-            onPressed: () => _loadData(),
-            icon: Icon(Icons.refresh, color: theme.colorScheme.onSurface),
-          ),
           IconButton(
             onPressed: _logout,
             icon: const Icon(Icons.logout, color: Colors.red),
@@ -180,9 +143,9 @@ class _ParentDashboardViewState extends State<ParentDashboardView> {
                     const SizedBox(height: 12),
                     _buildComplaintsCard(),
                     const SizedBox(height: 24),
-                    _buildSectionHeader('Messages', Icons.chat),
+                    _buildSectionHeader('Warden Contact', Icons.contact_phone),
                     const SizedBox(height: 12),
-                    _buildMessagesCard(),
+                    _buildWardenContactCard(),
                   ],
                 ),
               ),
@@ -332,6 +295,22 @@ class _ParentDashboardViewState extends State<ParentDashboardView> {
   }
 
   Widget _buildQuickActions() {
+    final unreadCount = _messages.where((m) => m['from'] == 'warden' && m['read'] != true).length;
+    
+    // Count pending leave approvals
+    final allLeaves = HiveStorage.loadList(HiveStorage.appStateBox, 'leave_applications');
+    final now = DateTime.now();
+    final pendingLeaves = allLeaves.where((l) {
+      if (l['studentId'] != widget.studentId) return false;
+      if (l['parentStatus'] != 'pending') return false;
+      if (l['appliedDate'] != null) {
+        final appliedDate = DateTime.parse(l['appliedDate']);
+        final hoursSinceApplied = now.difference(appliedDate).inHours;
+        if (hoursSinceApplied > 48) return false;
+      }
+      return true;
+    }).length;
+    
     return Row(
       children: [
         Expanded(
@@ -340,6 +319,7 @@ class _ParentDashboardViewState extends State<ParentDashboardView> {
             Icons.message,
             Colors.blue,
             _sendMessageToWarden,
+            unreadCount: unreadCount,
           ),
         ),
         const SizedBox(width: 12),
@@ -348,14 +328,15 @@ class _ParentDashboardViewState extends State<ParentDashboardView> {
             'Leave Approval',
             Icons.calendar_today,
             Colors.purple,
-            () => Navigator.push(context, MaterialPageRoute(builder: (_) => ParentLeaveApprovalView(studentId: widget.studentId))),
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => ParentLeaveApprovalView(studentId: widget.studentId))).then((_) => setState(() {})),
+            unreadCount: pendingLeaves,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildActionButton(String label, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildActionButton(String label, IconData icon, Color color, VoidCallback onTap, {int unreadCount = 0}) {
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -365,15 +346,36 @@ class _ParentDashboardViewState extends State<ParentDashboardView> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: color.withOpacity(0.3)),
         ),
-        child: Column(
+        child: Stack(
+          clipBehavior: Clip.none,
           children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
-              textAlign: TextAlign.center,
+            Column(
+              children: [
+                Icon(icon, color: color, size: 28),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
+            if (unreadCount > 0)
+              Positioned(
+                top: -4,
+                right: -4,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    unreadCount > 9 ? '9+' : unreadCount.toString(),
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -539,6 +541,81 @@ class _ParentDashboardViewState extends State<ParentDashboardView> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildWardenContactCard() {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.admin_panel_settings, color: Colors.blue, size: 32),
+              ),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Hostel Warden', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text('Available 24/7 for assistance', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 24),
+          _buildContactRow(Icons.phone, 'Phone', '+91 98765 43210', Colors.green),
+          const SizedBox(height: 12),
+          _buildContactRow(Icons.email, 'Email', 'warden@hostel.edu', Colors.blue),
+          const SizedBox(height: 12),
+          _buildContactRow(Icons.access_time, 'Office Hours', '9:00 AM - 6:00 PM', Colors.orange),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContactRow(IconData icon, String label, String value, Color color) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

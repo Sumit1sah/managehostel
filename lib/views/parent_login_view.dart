@@ -24,6 +24,15 @@ class _ParentLoginViewState extends State<ParentLoginView> {
     );
 
     if (parent.isNotEmpty) {
+      // Clear any existing student/warden session first
+      HiveStorage.save(HiveStorage.appStateBox, 'userId', null);
+      HiveStorage.save(HiveStorage.appStateBox, 'userRole', null);
+      
+      // Save parent session
+      HiveStorage.save(HiveStorage.appStateBox, 'current_user_role', 'parent');
+      HiveStorage.save(HiveStorage.appStateBox, 'current_parent_id', _parentIdController.text);
+      HiveStorage.save(HiveStorage.appStateBox, 'current_student_id', _studentIdController.text);
+      
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(

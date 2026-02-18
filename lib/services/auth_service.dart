@@ -9,6 +9,11 @@ class AuthService {
       return AuthResult(false, 'Please enter both user ID and password');
     }
     
+    // Clear any existing parent session
+    HiveStorage.save(HiveStorage.appStateBox, 'current_user_role', null);
+    HiveStorage.save(HiveStorage.appStateBox, 'current_parent_id', null);
+    HiveStorage.save(HiveStorage.appStateBox, 'current_student_id', null);
+    
     // Check for warden account
     if (userId.toLowerCase() == 'warden' && password == 'warden123') {
       await _createSession(userId);
