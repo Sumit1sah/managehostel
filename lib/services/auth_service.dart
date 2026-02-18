@@ -13,13 +13,22 @@ class AuthService {
     if (userId.toLowerCase() == 'warden' && password == 'warden123') {
       await _createSession(userId);
       await SecureStorage.saveCredentials(userId, _hashPassword(password));
-      return AuthResult(true, 'Warden login successful');
+      return AuthResult(true, 'Warden login successful', userType: 'warden');
     }
     
-    // Validate credentials
+    // Check for parent account
+    final parents = HiveStorage.loadList(HiveStorage.appStateBox, 'parents');
+    for (var parent in parents) {
+      if (parent['parentId'] == userId && parent['password'] == password) {
+        await _createSession(userId);
+        return AuthResult(true, 'Parent login successful', userType: 'parent', studentId: parent['studentId']);
+      }
+    }
+    
+    // Validate student credentials
     if (await _validateCredentials(userId, password)) {
       await _createSession(userId);
-      return AuthResult(true, 'Login successful');
+      return AuthResult(true, 'Login successful', userType: 'student');
     } else {
       return AuthResult(false, 'Invalid credentials');
     }
@@ -134,6 +143,8 @@ class AuthService {
 class AuthResult {
   final bool success;
   final String message;
+  final String? userType;
+  final String? studentId;
   
-  AuthResult(this.success, this.message);
+  AuthResult(this.success, this.message, {this.userType, this.studentId});
 }

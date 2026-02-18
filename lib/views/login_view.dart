@@ -5,6 +5,7 @@ import '../core/providers/app_state_provider.dart';
 import '../core/storage/hive_storage.dart';
 import '../main.dart';
 import 'warden_dashboard_view.dart';
+import 'parent_dashboard_view.dart';
 
 class LoginView extends StatefulWidget {
   const LoginView({Key? key}) : super(key: key);
@@ -157,13 +158,21 @@ class _LoginViewState extends State<LoginView> {
         if (result.success) {
           context.read<AppStateProvider>().saveNavigationState('/home');
           
-          // Check if user is warden
-          final isWarden = await _authService.isWarden();
-          
-          if (isWarden) {
+          // Route based on user type
+          if (result.userType == 'warden') {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (_) => const WardenDashboardView()),
+            );
+          } else if (result.userType == 'parent') {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ParentDashboardView(
+                  parentId: _userIdController.text.trim(),
+                  studentId: result.studentId!,
+                ),
+              ),
             );
           } else {
             Navigator.pushReplacement(

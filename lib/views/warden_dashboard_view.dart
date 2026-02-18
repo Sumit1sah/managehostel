@@ -10,6 +10,9 @@ import 'user_management_view.dart';
 import 'settings_view.dart';
 import 'complaint_management_view.dart';
 import 'issue_management_view.dart';
+import 'parent_login_view.dart';
+import 'warden_leave_management_view.dart';
+import 'warden_parent_messages_view.dart';
 import '../core/storage/hive_storage.dart';
 
 class WardenDashboardView extends StatefulWidget {
@@ -108,6 +111,14 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
           ],
         ),
         actions: [
+          IconButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ParentLoginView()),
+            ),
+            icon: Icon(Icons.family_restroom, color: theme.colorScheme.primary),
+            tooltip: 'Parent Login',
+          ),
           IconButton(
             onPressed: () => Navigator.push(
               context,
@@ -233,24 +244,41 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
   }
 
   Widget _buildQuickActions() {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _buildActionButton(
-            'New Announcement',
-            Icons.campaign_outlined,
-            const Color(0xFF7C3AED),
-            _showQuickAnnouncementDialog,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionButton(
+                'New Announcement',
+                Icons.campaign_outlined,
+                const Color(0xFF7C3AED),
+                _showQuickAnnouncementDialog,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildActionButton(
+                'Parent Chat',
+                Icons.chat_outlined,
+                const Color(0xFF059669),
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => WardenParentMessagesView())),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildActionButton(
-            'View Issues',
-            Icons.bug_report_outlined,
-            const Color(0xFFDC2626),
-            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IssueManagementView())),
-          ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionButton(
+                'View Issues',
+                Icons.bug_report_outlined,
+                const Color(0xFFDC2626),
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IssueManagementView())),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -323,6 +351,20 @@ class _WardenDashboardViewState extends State<WardenDashboardView> {
             await Navigator.push(context, MaterialPageRoute(builder: (_) => const RoomCleaningView()));
             setState(() {}); // Refresh to show updated cleaning status
           },
+        ),
+        _buildManagementCard(
+          'Holiday Leave',
+          'Leave Management',
+          Icons.calendar_today_outlined,
+          const Color(0xFF7C3AED),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WardenLeaveManagementView())),
+        ),
+        _buildManagementCard(
+          'Student Issues',
+          'Issue Management',
+          Icons.bug_report_outlined,
+          const Color(0xFFDC2626),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IssueManagementView())),
         ),
         _buildManagementCard(
           'System Settings',

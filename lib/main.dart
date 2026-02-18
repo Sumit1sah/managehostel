@@ -14,6 +14,8 @@ import 'views/issue_view.dart';
 import 'views/dashboard_view.dart';
 import 'views/room_availability_view.dart';
 import 'views/mess_menu_view.dart';
+import 'views/leave_view.dart';
+import 'views/holiday_list_view.dart';
 import 'services/auth_service.dart';
 import 'core/storage/hive_storage.dart';
 import 'core/providers/theme_provider.dart';
@@ -340,6 +342,22 @@ class _HomeViewState extends State<HomeView> {
                               context,
                               MaterialPageRoute(
                                   builder: (_) => const AnnouncementView()))),
+                      _buildModernCard(
+                          context,
+                          'Leave',
+                          Icons.calendar_today_outlined,
+                          () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const LeaveView()))),
+                      _buildModernCard(
+                          context,
+                          'Holidays',
+                          Icons.event_outlined,
+                          () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const HolidayListView()))),
                       _buildModernCard(
                           context,
                           'Issue',

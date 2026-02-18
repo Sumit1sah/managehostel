@@ -54,6 +54,9 @@ class _UserManagementViewState extends State<UserManagementView> {
     final passwordController = TextEditingController();
     final phoneController = TextEditingController();
     final roomController = TextEditingController();
+    final parentIdController = TextEditingController();
+    final parentPasswordController = TextEditingController();
+    final parentPhoneController = TextEditingController();
     String? selectedFloor;
     
     final floors = HiveStorage.load<int>(HiveStorage.appStateBox, 'floors', defaultValue: 2) ?? 2;
@@ -68,6 +71,8 @@ class _UserManagementViewState extends State<UserManagementView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              const Text('Student Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 12),
               TextField(
                 controller: nameController,
                 decoration: const InputDecoration(
@@ -132,6 +137,34 @@ class _UserManagementViewState extends State<UserManagementView> {
                     roomController.text = value ?? '';
                   },
                 ),
+              const Divider(height: 32),
+              const Text('Parent Account', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: parentIdController,
+                decoration: const InputDecoration(
+                  labelText: 'Parent ID',
+                  prefixIcon: Icon(Icons.family_restroom),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: parentPasswordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Parent Password',
+                  prefixIcon: Icon(Icons.lock),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: parentPhoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Parent Mobile Number',
+                  prefixIcon: Icon(Icons.phone),
+                ),
+              ),
             ],
           ),
         ),
@@ -147,7 +180,10 @@ class _UserManagementViewState extends State<UserManagementView> {
                   passwordController.text.isNotEmpty &&
                   phoneController.text.isNotEmpty &&
                   selectedFloor != null &&
-                  roomController.text.isNotEmpty) {
+                  roomController.text.isNotEmpty &&
+                  parentIdController.text.isNotEmpty &&
+                  parentPasswordController.text.isNotEmpty &&
+                  parentPhoneController.text.isNotEmpty) {
                 setState(() {
                   _users.add({
                     'name': nameController.text,
@@ -160,9 +196,20 @@ class _UserManagementViewState extends State<UserManagementView> {
                 });
                 _saveUsers();
                 _occupyRoomBed(selectedFloor!, roomController.text);
+                
+                // Create parent account
+                final parents = HiveStorage.loadList(HiveStorage.appStateBox, 'parents');
+                parents.add({
+                  'parentId': parentIdController.text,
+                  'studentId': userIdController.text,
+                  'password': parentPasswordController.text,
+                  'phone': parentPhoneController.text,
+                });
+                HiveStorage.saveList(HiveStorage.appStateBox, 'parents', parents);
+                
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Student ${userIdController.text} created successfully')),
+                  SnackBar(content: Text('Student ${userIdController.text} and Parent ${parentIdController.text} created')),
                 );
               }
             },
@@ -213,6 +260,107 @@ class _UserManagementViewState extends State<UserManagementView> {
               }
             },
             child: const Text('Verify'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editStudent(int index) {
+    final wardenPasswordController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Verify Warden Identity'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Enter warden password to edit student "${_users[index]['userId']}":'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: wardenPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Warden Password',
+                prefixIcon: Icon(Icons.admin_panel_settings),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (wardenPasswordController.text == 'warden123') {
+                Navigator.pop(context);
+                _showEditStudentDialog(index);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Invalid warden password')),
+                );
+              }
+            },
+            child: const Text('Verify'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditStudentDialog(int index) {
+    final user = _users[index];
+    final nameController = TextEditingController(text: user['name']);
+    final phoneController = TextEditingController(text: user['phone']);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Student Information'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Student Name',
+                prefixIcon: Icon(Icons.person),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Phone Number',
+                prefixIcon: Icon(Icons.phone),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (nameController.text.isNotEmpty && phoneController.text.isNotEmpty) {
+                setState(() {
+                  _users[index]['name'] = nameController.text;
+                  _users[index]['phone'] = phoneController.text;
+                });
+                _saveUsers();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Student information updated')),
+                );
+              }
+            },
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -298,87 +446,111 @@ class _UserManagementViewState extends State<UserManagementView> {
                     itemCount: _filteredUsers.length,
                     itemBuilder: (context, index) {
                       final user = _filteredUsers[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: theme.colorScheme.primary,
-                      child: Text(
-                        (user['name'] ?? user['userId']!)[0].toUpperCase(),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    title: Text(
-                      user['name'] ?? user['userId']!,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                return Stack(
+                  children: [
+                    Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: theme.colorScheme.primary,
+                          child: Text(
+                            (user['name'] ?? user['userId']!)[0].toUpperCase(),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        title: Text(
+                          user['name'] ?? user['userId']!,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.badge, size: 14, color: Colors.grey),
-                              const SizedBox(width: 4),
-                              Text('ID: ${user['userId']!}'),
+                              Row(
+                                children: [
+                                  const Icon(Icons.badge, size: 14, color: Colors.grey),
+                                  const SizedBox(width: 4),
+                                  Text('ID: ${user['userId']!}'),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.phone, size: 14, color: Colors.grey),
+                                  const SizedBox(width: 4),
+                                  Text('Phone: ${user['phone'] ?? 'N/A'}'),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              GestureDetector(
+                                onTap: () => _showPasswordDialog(user['password'] ?? 'N/A'),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.lock, size: 14, color: Colors.grey),
+                                    const SizedBox(width: 4),
+                                    Text('Password: ${'*' * (user['password']?.length ?? 3)}'),
+                                    const SizedBox(width: 8),
+                                    const Icon(Icons.visibility, size: 14, color: Colors.blue),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.layers, size: 14, color: Colors.grey),
+                                  const SizedBox(width: 4),
+                                  Text('Floor: ${user['floor'] ?? 'N/A'}'),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.room, size: 14, color: Colors.grey),
+                                  const SizedBox(width: 4),
+                                  Text('Room: ${user['room'] ?? 'N/A'}'),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              GestureDetector(
+                                onTap: () => _showParentIdDialog(user['userId']!),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.family_restroom, size: 14, color: Colors.grey),
+                                    const SizedBox(width: 4),
+                                    Text('Parent ID: ${_getParentId(user['userId']!)}'),
+                                    const SizedBox(width: 8),
+                                    const Icon(Icons.visibility, size: 14, color: Colors.blue),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.phone, size: 14, color: Colors.grey),
-                              const SizedBox(width: 4),
-                              Text('Phone: ${user['phone'] ?? 'N/A'}'),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          GestureDetector(
-                            onTap: () => _showPasswordDialog(user['password'] ?? 'N/A'),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.lock, size: 14, color: Colors.grey),
-                                const SizedBox(width: 4),
-                                Text('Password: ${'*' * (user['password']?.length ?? 3)}'),
-                                const SizedBox(width: 8),
-                                const Icon(Icons.visibility, size: 14, color: Colors.blue),
-                              ],
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.swap_horiz, color: Colors.blue),
+                              onPressed: () => _showRoomSwapDialog(index),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.layers, size: 14, color: Colors.grey),
-                              const SizedBox(width: 4),
-                              Text('Floor: ${user['floor'] ?? 'N/A'}'),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.room, size: 14, color: Colors.grey),
-                              const SizedBox(width: 4),
-                              Text('Room: ${user['room'] ?? 'N/A'}'),
-                            ],
-                          ),
-                        ],
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _deleteUser(index),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.swap_horiz, color: Colors.blue),
-                          onPressed: () => _showRoomSwapDialog(index),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _deleteUser(index),
-                        ),
-                      ],
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.orange, size: 20),
+                        onPressed: () => _editStudent(index),
+                      ),
                     ),
-                  ),
+                  ],
                 );
                     },
                   ),
@@ -393,6 +565,7 @@ class _UserManagementViewState extends State<UserManagementView> {
   }
 
   void _showPasswordDialog(String password) {
+    final userIndex = _users.indexWhere((u) => u['password'] == password);
     final wardenPasswordController = TextEditingController();
     
     showDialog(
@@ -423,7 +596,7 @@ class _UserManagementViewState extends State<UserManagementView> {
             onPressed: () {
               if (wardenPasswordController.text == 'warden123') {
                 Navigator.pop(context);
-                _showStudentPassword(password);
+                _showStudentPassword(userIndex);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Invalid warden password')),
@@ -437,7 +610,8 @@ class _UserManagementViewState extends State<UserManagementView> {
     );
   }
 
-  void _showStudentPassword(String password) {
+  void _showStudentPassword(int userIndex) {
+    final password = _users[userIndex]['password'] ?? '';
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -463,6 +637,52 @@ class _UserManagementViewState extends State<UserManagementView> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _editStudentPassword(userIndex);
+            },
+            child: const Text('Edit'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editStudentPassword(int userIndex) {
+    final passwordController = TextEditingController(text: _users[userIndex]['password']);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Student Password'),
+        content: TextField(
+          controller: passwordController,
+          decoration: const InputDecoration(
+            labelText: 'New Password',
+            prefixIcon: Icon(Icons.lock),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (passwordController.text.isNotEmpty) {
+                setState(() {
+                  _users[userIndex]['password'] = passwordController.text;
+                });
+                _saveUsers();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Student password updated')),
+                );
+              }
+            },
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -725,6 +945,219 @@ class _UserManagementViewState extends State<UserManagementView> {
               ),
               child: const Text('Understood', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getParentId(String studentId) {
+    final parents = HiveStorage.loadList(HiveStorage.appStateBox, 'parents');
+    final parent = parents.firstWhere(
+      (p) => p['studentId'] == studentId,
+      orElse: () => {},
+    );
+    return parent.isNotEmpty ? parent['parentId'] : 'N/A';
+  }
+
+  void _showParentIdDialog(String studentId) {
+    final parents = HiveStorage.loadList(HiveStorage.appStateBox, 'parents');
+    final parentIndex = parents.indexWhere((p) => p['studentId'] == studentId);
+    
+    if (parentIndex == -1) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('No Parent Account'),
+          content: const Text('No parent account linked to this student.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final parent = parents[parentIndex];
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Parent Account Details'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.family_restroom, color: Colors.blue),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SelectableText(
+                    'Parent ID: ${parent['parentId']}',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.school, color: Colors.green),
+                const SizedBox(width: 8),
+                Text('Student ID: ${parent['studentId']}'),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.phone, color: Colors.purple),
+                const SizedBox(width: 8),
+                Text('Phone: ${parent['phone'] ?? 'N/A'}'),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.lock_open, color: Colors.orange),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SelectableText(
+                    'Password: ${parent['password']}',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _editParentAccount(parentIndex);
+            },
+            child: const Text('Edit'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editParentAccount(int parentIndex) {
+    final wardenPasswordController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Verify Warden Identity'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter warden password to edit parent account:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: wardenPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Warden Password',
+                prefixIcon: Icon(Icons.admin_panel_settings),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (wardenPasswordController.text == 'warden123') {
+                Navigator.pop(context);
+                _showEditParentDialog(parentIndex);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Invalid warden password')),
+                );
+              }
+            },
+            child: const Text('Verify'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditParentDialog(int parentIndex) {
+    final parents = HiveStorage.loadList(HiveStorage.appStateBox, 'parents');
+    final parent = parents[parentIndex];
+    final parentIdController = TextEditingController(text: parent['parentId']);
+    final parentPasswordController = TextEditingController(text: parent['password']);
+    final parentPhoneController = TextEditingController(text: parent['phone'] ?? '');
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Parent Account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: parentIdController,
+              decoration: const InputDecoration(
+                labelText: 'Parent ID',
+                prefixIcon: Icon(Icons.family_restroom),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: parentPasswordController,
+              decoration: const InputDecoration(
+                labelText: 'Parent Password',
+                prefixIcon: Icon(Icons.lock),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: parentPhoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Parent Mobile Number',
+                prefixIcon: Icon(Icons.phone),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (parentIdController.text.isNotEmpty && 
+                  parentPasswordController.text.isNotEmpty &&
+                  parentPhoneController.text.isNotEmpty) {
+                parents[parentIndex]['parentId'] = parentIdController.text;
+                parents[parentIndex]['password'] = parentPasswordController.text;
+                parents[parentIndex]['phone'] = parentPhoneController.text;
+                HiveStorage.saveList(HiveStorage.appStateBox, 'parents', parents);
+                Navigator.pop(context);
+                setState(() {});
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Parent account updated')),
+                );
+              }
+            },
+            child: const Text('Save'),
           ),
         ],
       ),

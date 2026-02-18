@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../core/storage/hive_storage.dart';
 import '../services/auth_service.dart';
 import 'issue_management_view.dart';
+import 'leave_application_view.dart';
+import 'holiday_list_view.dart';
 
 class DashboardView extends StatefulWidget {
   const DashboardView({Key? key}) : super(key: key);
@@ -55,11 +57,11 @@ class _DashboardViewState extends State<DashboardView> {
               children: [
                 _buildHeader(),
                 const SizedBox(height: 24),
-                _buildMetricsRow(),
+                if (!_isWarden) _buildQuickIssueSection(),
                 const SizedBox(height: 24),
                 _buildComplaintCard(),
                 const SizedBox(height: 24),
-                if (!_isWarden) _buildQuickIssueSection(),
+                _buildMetricsRow(),
                 const SizedBox(height: 24),
                 _buildChartCard(),
                 const SizedBox(height: 24),
@@ -452,6 +454,42 @@ class _DashboardViewState extends State<DashboardView> {
               const SizedBox(width: 12),
               Expanded(
                 child: _buildQuickIssueButton('Other', Icons.more_horiz, Colors.purple),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    final userId = await AuthService().getUserId();
+                    if (userId == null) return;
+                    final users = HiveStorage.loadList(HiveStorage.appStateBox, 'authorized_users');
+                    final userData = users.firstWhere((u) => u['userId'] == userId, orElse: () => {});
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => LeaveApplicationView(studentId: userId, studentName: userData['name'] ?? userId)));
+                  },
+                  icon: const Icon(Icons.calendar_today),
+                  label: const Text('Apply for Leave'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.all(16),
+                    backgroundColor: const Color(0xFF64FFDA),
+                    foregroundColor: Colors.black,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HolidayListView())),
+                  icon: const Icon(Icons.event),
+                  label: const Text('Holiday List'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.all(16),
+                    backgroundColor: const Color(0xFFB19CD9),
+                    foregroundColor: Colors.black,
+                  ),
+                ),
               ),
             ],
           ),
