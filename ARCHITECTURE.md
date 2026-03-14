@@ -1,5 +1,30 @@
 # Architecture & Design Decisions
 
+## System Architecture Diagram
+*Purpose: Shows the overall structure of the system.*
+
+```mermaid
+graph TD
+    %% Styling for dark theme and minimal lines
+    classDef default fill:#1f1f1f,stroke:#ffffff,stroke-width:2px,color:#ffffff,rx:4px,ry:4px;
+    classDef database fill:#1f1f1f,stroke:#ffffff,stroke-width:2px,color:#ffffff;
+    
+    %% Components
+    Apps["Mobile App / Web App"]
+    API["API / Backend"]
+    Services["Services (Auth, Trend, User, etc.)"]
+    DB[("Database")]
+
+    %% Connections
+    Apps -->|HTTPS/REST| API
+    API -->|Internal RPC/HTTP| Services
+    Services -->|TCP/IP| DB
+
+    %% Apply Styles
+    class Apps,API,Services default;
+    class DB database;
+```
+
 ## State Management: Provider
 
 **Why Provider?**
